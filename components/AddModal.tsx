@@ -53,12 +53,11 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
     const formData = new FormData(e.currentTarget);
     const result = await createIdea(formData);
 
-    if (result.error) {
-      setError(result.error);
-      setLoading(false);
-    } else {
-      router.refresh();
+    if (result.success) {
       onClose();
+      router.refresh();
+    } else {
+      setError(result.error || "Failed to create idea");
       setLoading(false);
     }
   }
@@ -71,12 +70,11 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
     const formData = new FormData(e.currentTarget);
     const result = await createHabit(formData);
 
-    if (result.error) {
-      setError(result.error);
-      setLoading(false);
-    } else {
-      router.refresh();
+    if (result.success) {
       onClose();
+      router.refresh();
+    } else {
+      setError(result.error || "Failed to create habit");
       setLoading(false);
     }
   }
@@ -89,248 +87,206 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
     const formData = new FormData(e.currentTarget);
     const result = await createOrUpdateDailyLog(formData);
 
-    if (result.error) {
-      setError(result.error);
-      setLoading(false);
-    } else {
-      router.refresh();
+    if (result.success) {
       onClose();
+      router.refresh();
+    } else {
+      setError(result.error || "Failed to save note");
       setLoading(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-end sm:items-center sm:justify-center p-0" onClick={onClose}>
-      <div
-        className="w-full h-full sm:h-full sm:w-full md:h-full md:w-full lg:h-full lg:w-full relative overflow-hidden bg-slate-50 dark:bg-slate-900 backdrop-blur-none sm:backdrop-blur-sm dark:backdrop-blur-xl rounded-t-3xl sm:rounded-none md:rounded-none lg:rounded-none shadow-premium-xl border-t sm:border-0 md:border-0 lg:border-0 border-slate-200/30 dark:border-slate-700/50 animate-scale-in flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-400/0 to-purple-400/0 dark:from-indigo-400/0 dark:to-purple-400/0 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        <div className="flex-shrink-0 bg-slate-50 dark:bg-slate-900 backdrop-blur-none sm:backdrop-blur-sm dark:backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-5 md:py-6 lg:py-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 md:gap-6 relative z-10">
-          <div className="flex gap-2 w-full sm:w-auto overflow-x-auto sm:overflow-x-visible pb-2 sm:pb-0 -mx-2 sm:mx-0 px-2 sm:px-0">
-            <button
-              onClick={() => setActiveTab("idea")}
-              className={`tap-target flex items-center gap-1.5 sm:gap-2 md:gap-2.5 px-3 sm:px-4 md:px-5 lg:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl md:rounded-2xl text-xs sm:text-sm md:text-base font-semibold transition-all duration-300 whitespace-nowrap min-h-[44px] md:min-h-[48px] ${
-                activeTab === "idea"
-                  ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg scale-105"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95"
-              }`}
-            >
-              <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 flex-shrink-0" />
-              <span>Idea</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("habit")}
-              className={`tap-target flex items-center gap-1.5 sm:gap-2 md:gap-2.5 px-3 sm:px-4 md:px-5 lg:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl md:rounded-2xl text-xs sm:text-sm md:text-base font-semibold transition-all duration-300 whitespace-nowrap min-h-[44px] md:min-h-[48px] ${
-                activeTab === "habit"
-                  ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg scale-105"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95"
-              }`}
-            >
-              <Target className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 flex-shrink-0" />
-              <span>Habit</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("note")}
-              className={`tap-target flex items-center gap-1.5 sm:gap-2 md:gap-2.5 px-3 sm:px-4 md:px-5 lg:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl md:rounded-2xl text-xs sm:text-sm md:text-base font-semibold transition-all duration-300 whitespace-nowrap min-h-[44px] md:min-h-[48px] ${
-                activeTab === "note"
-                  ? "bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg scale-105"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95"
-              }`}
-            >
-              <FileText className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 flex-shrink-0" />
-              <span>Note</span>
-            </button>
-          </div>
-          <button onClick={onClose} className="tap-target p-2 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center">
-            <X className="w-5 h-5 sm:w-6 sm:h-6 text-slate-600 dark:text-slate-400" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in md:backdrop-blur-none">
+      <div className="relative w-full h-full md:h-auto md:max-w-2xl bg-slate-50 dark:bg-slate-900 rounded-3xl md:rounded-3xl shadow-premium-xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-slate-200/50 dark:border-slate-800/50">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Add New</h2>
+          <button
+            onClick={onClose}
+            className="tap-target p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-6 h-6 text-slate-600 dark:text-slate-400" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 lg:p-10 xl:p-12 relative z-10">
+        {/* Tabs */}
+        <div className="flex border-b border-slate-200/50 dark:border-slate-800/50">
+          {[
+            { id: "idea" as const, label: "Idea", icon: Lightbulb },
+            { id: "habit" as const, label: "Habit", icon: Target },
+            { id: "note" as const, label: "Note", icon: FileText },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 font-semibold transition-all ${
+                  activeTab === tab.id
+                    ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
           {error && (
-            <div className="mb-4 sm:mb-5 md:mb-6 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 md:py-4 rounded-xl text-xs sm:text-sm md:text-base font-medium shadow-sm">
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
               {error}
             </div>
           )}
 
+          {/* Idea Form */}
           {activeTab === "idea" && (
-            <form onSubmit={handleIdeaSubmit} className="h-full flex flex-col space-y-4 sm:space-y-5 md:space-y-6">
-              <div className="flex-1 flex flex-col">
-                <label htmlFor="idea-text" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
-                  Your Idea
+            <form onSubmit={handleIdeaSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Idea *
                 </label>
                 <textarea
-                  id="idea-text"
                   name="text"
                   required
+                  rows={4}
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100 resize-none"
+                  placeholder="What's your idea?"
                   autoFocus
-                  className="flex-1 w-full px-4 sm:px-5 md:px-6 py-4 sm:py-5 md:py-6 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all resize-none"
-                  placeholder="Capture your thought..."
                 />
               </div>
               <div>
-                <label htmlFor="idea-tags" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
-                  Tags (comma-separated)
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Topic
                 </label>
-                <input
-                  id="idea-tags"
-                  name="tags"
-                  type="text"
-                  className="w-full px-4 sm:px-5 md:px-6 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all"
-                  placeholder="work, personal, inspiration"
-                />
+                <select
+                  name="topicId"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                >
+                  <option value="">Select a topic</option>
+                  {topics.map((topic) => (
+                    <option key={topic._id} value={topic._id}>
+                      {topic.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label htmlFor="idea-priority" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                   Priority
                 </label>
                 <select
-                  id="idea-priority"
                   name="priority"
-                  defaultValue="normal"
-                  className="w-full px-4 sm:px-5 md:px-6 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                 >
                   <option value="normal">Normal</option>
-                  <option value="important">Important</option>
+                  <option value="high">High</option>
+                  <option value="low">Low</option>
                 </select>
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="tap-target w-full py-3 sm:py-4 md:py-5 px-4 md:px-6 bg-gradient-to-r from-indigo-500 to-purple-600 active:from-indigo-600 active:to-purple-700 text-white rounded-xl md:rounded-2xl font-bold text-sm sm:text-base md:text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg active:shadow-xl active:scale-[0.98] touch-active no-select hover:scale-[1.02]"
+                className="w-full px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Saving..." : "Save Idea"}
+                {loading ? "Creating..." : "Create Idea"}
               </button>
             </form>
           )}
 
+          {/* Habit Form */}
           {activeTab === "habit" && (
-            <form onSubmit={handleHabitSubmit} className="h-full flex flex-col space-y-4 sm:space-y-5 md:space-y-6">
+            <form onSubmit={handleHabitSubmit} className="space-y-4">
               <div>
-                <label htmlFor="habit-name" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
-                  Habit Name
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Habit Name *
                 </label>
                 <input
-                  id="habit-name"
+                  type="text"
                   name="name"
                   required
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  placeholder="e.g., Morning Exercise"
                   autoFocus
-                  type="text"
-                  className="w-full px-4 sm:px-5 md:px-6 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all"
-                  placeholder="e.g., Morning meditation"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="habit-category" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                     Category
                   </label>
                   <select
-                    id="habit-category"
                     name="category"
-                    required
-                    defaultValue="personal"
-                    className="w-full px-4 sm:px-5 md:px-6 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   >
+                    <option value="personal">Personal</option>
                     <option value="health">Health</option>
                     <option value="learning">Learning</option>
                     <option value="business">Business</option>
-                    <option value="personal">Personal</option>
                     <option value="custom">Custom</option>
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="habit-frequency" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
-                    Frequency
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Priority
                   </label>
                   <select
-                    id="habit-frequency"
-                    name="frequency"
-                    required
-                    defaultValue="daily"
-                    className="w-full px-4 sm:px-5 md:px-6 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all"
+                    name="priority"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="custom">Custom</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="low">Low</option>
                   </select>
                 </div>
               </div>
               <div>
-                <label htmlFor="habit-priority" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
-                  Priority
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Frequency
                 </label>
                 <select
-                  id="habit-priority"
-                  name="priority"
-                  required
-                  defaultValue="medium"
-                  className="w-full px-4 sm:px-5 md:px-6 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all"
+                  name="frequency"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="custom">Custom</option>
                 </select>
-              </div>
-              <div className="flex items-start gap-3 md:gap-4">
-                <input
-                  id="idea-generating"
-                  name="ideaGenerating"
-                  type="checkbox"
-                  value="true"
-                  className="mt-1 w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"
-                />
-                <label htmlFor="idea-generating" className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 leading-relaxed pt-0.5">
-                  Idea Generating (prompt for ideas when completed)
-                </label>
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="tap-target w-full py-3 sm:py-4 md:py-5 px-4 md:px-6 bg-gradient-to-r from-indigo-500 to-purple-600 active:from-indigo-600 active:to-purple-700 text-white rounded-xl md:rounded-2xl font-bold text-sm sm:text-base md:text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg active:shadow-xl active:scale-[0.98] touch-active no-select hover:scale-[1.02] mt-auto"
+                className="w-full px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Creating..." : "Create Habit"}
               </button>
             </form>
           )}
 
+          {/* Note Form */}
           {activeTab === "note" && (
-            <form onSubmit={handleNoteSubmit} className="h-full flex flex-col space-y-4 sm:space-y-5 md:space-y-6">
-              <div className="flex-1 flex flex-col">
-                <label htmlFor="note-text" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
-                  Daily Notes
+            <form onSubmit={handleNoteSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Daily Note
                 </label>
                 <textarea
-                  id="note-text"
-                  name="notes"
-                  required
+                  name="note"
+                  rows={6}
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100 resize-none"
+                  placeholder="Write your daily note..."
                   autoFocus
-                  className="flex-1 w-full px-4 sm:px-5 md:px-6 py-4 sm:py-5 md:py-6 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all resize-none"
-                  placeholder="How was your day?"
                 />
-              </div>
-              <div>
-                <label htmlFor="note-mood" className="block text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 text-slate-700 dark:text-slate-300">
-                  Mood
-                </label>
-                <select
-                  id="note-mood"
-                  name="mood"
-                  className="w-full px-4 sm:px-5 md:px-6 py-3 sm:py-4 md:py-5 text-sm sm:text-base md:text-lg border border-slate-200 dark:border-slate-700 rounded-xl md:rounded-2xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all"
-                >
-                  <option value="">Select mood</option>
-                  <option value="happy">😊 Happy</option>
-                  <option value="neutral">😐 Neutral</option>
-                  <option value="sad">😢 Sad</option>
-                  <option value="anxious">😰 Anxious</option>
-                  <option value="excited">🤩 Excited</option>
-                </select>
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="tap-target w-full py-3 sm:py-4 md:py-5 px-4 md:px-6 bg-gradient-to-r from-indigo-500 to-purple-600 active:from-indigo-600 active:to-purple-700 text-white rounded-xl md:rounded-2xl font-bold text-sm sm:text-base md:text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg active:shadow-xl active:scale-[0.98] touch-active no-select hover:scale-[1.02]"
+                className="w-full px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Saving..." : "Save Note"}
               </button>

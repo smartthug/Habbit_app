@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Target, Plus, Lightbulb, User } from "lucide-react";
+import { Home, Target, Plus, Lightbulb, User, Calendar, BarChart3 } from "lucide-react";
 import AddModal from "./AddModal";
 
 export default function Navigation() {
@@ -14,6 +14,8 @@ export default function Navigation() {
     { href: "/dashboard", icon: Home, label: "Home" },
     { href: "/habits", icon: Target, label: "Habits" },
     { href: "/ideas", icon: Lightbulb, label: "Ideas" },
+    { href: "/calendar", icon: Calendar, label: "Calendar" },
+    { href: "/analysis", icon: BarChart3, label: "Analysis" },
     { href: "/profile", icon: User, label: "Profile" },
   ];
 

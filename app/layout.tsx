@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { NotificationManager } from "@/components/NotificationManager";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -41,7 +42,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans h-full antialiased touch-pan-y`}>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <NotificationManager />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
