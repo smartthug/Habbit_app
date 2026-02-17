@@ -5,6 +5,9 @@ import { verifyAccessTokenEdge } from "./lib/jwt-edge";
 // Public routes that don't require authentication
 const AUTH_ROUTES = ["/auth/login", "/auth/signup"];
 
+// Routes that require authentication but not profile setup
+const PROFILE_SETUP_ROUTE = "/profile-setup";
+
 // Routes that should be excluded from middleware
 const EXCLUDED_PATHS = [
   "/_next",
@@ -24,6 +27,7 @@ export async function middleware(request: NextRequest) {
 
   const token = request.cookies.get("accessToken")?.value;
   const isAuthRoute = AUTH_ROUTES.includes(pathname);
+  const isProfileSetupRoute = pathname === PROFILE_SETUP_ROUTE;
   const isAuthenticated = token ? await verifyToken(token) : false;
 
   // If authenticated and on auth page → redirect to dashboard
@@ -32,11 +36,11 @@ export async function middleware(request: NextRequest) {
   }
 
   // If not authenticated and on protected route → redirect to login
-  if (!isAuthenticated && !isAuthRoute) {
+  if (!isAuthenticated && !isAuthRoute && !isProfileSetupRoute) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
-  // Allow request to proceed
+  // Allow request to proceed (profile setup check will be done in the page component)
   return NextResponse.next();
 }
 

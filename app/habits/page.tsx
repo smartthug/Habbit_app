@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getHabits, deleteHabit, logHabit, getHabitStreak } from "@/app/actions/habits";
 import { getIdeas } from "@/app/actions/ideas";
+import { getTodayJournalCount } from "@/app/actions/journal";
 import { Check, X, Trash2, Flame, Lightbulb, Target } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import AddModal from "@/components/AddModal";
@@ -11,6 +13,7 @@ import { format } from "date-fns";
 import Link from "next/link";
 
 export default function HabitsPage() {
+  const router = useRouter();
   const [habits, setHabits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -98,7 +101,7 @@ export default function HabitsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
-      <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
+        <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
         <div className="flex items-center justify-between mb-6 md:mb-8">
           <div>
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent dark:from-indigo-400 dark:to-purple-400 tracking-tight">

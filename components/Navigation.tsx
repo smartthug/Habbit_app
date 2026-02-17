@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Target, Plus, Lightbulb, User, Calendar, BarChart3 } from "lucide-react";
@@ -19,14 +19,19 @@ export default function Navigation() {
     { href: "/profile", icon: User, label: "Profile" },
   ];
 
+  // Hide navigation on profile-setup page
+  const hideNav = pathname === "/profile-setup";
+
   return (
     <>
       {/* Mobile Navigation - Bottom */}
+      {!hideNav && (
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-50/95 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-200/50 dark:border-slate-800/50 z-50 shadow-premium-lg safe-bottom md:hidden">
         <div className="max-w-md mx-auto flex items-center justify-around h-20 px-2 pb-safe">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+
             return (
               <Link
                 key={item.href}
@@ -58,6 +63,7 @@ export default function Navigation() {
           </button>
         </div>
       </nav>
+      )}
 
       {/* Desktop/Tablet Navigation - Sidebar */}
       <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 lg:w-64 bg-slate-50 dark:bg-slate-900 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-700/50 z-50 shadow-premium-lg flex-col items-center lg:items-start py-6 px-4 lg:px-6 safe-top overflow-y-auto">
@@ -65,6 +71,7 @@ export default function Navigation() {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+
             return (
               <Link
                 key={item.href}
@@ -76,7 +83,7 @@ export default function Navigation() {
                 }`}
               >
                 <Icon className="w-6 h-6 flex-shrink-0" />
-                <span className={`hidden lg:block text-sm font-semibold tracking-tight ${isActive ? "text-indigo-600 dark:text-indigo-400" : ""}`}>
+                <span className={`hidden lg:block text-sm font-semibold tracking-tight ${isActive ? "text-white" : ""}`}>
                   {item.label}
                 </span>
               </Link>

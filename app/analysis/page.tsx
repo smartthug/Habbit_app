@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getAnalysisData } from "@/app/actions/analysis";
+import { getTodayJournalCount } from "@/app/actions/journal";
 import Navigation from "@/components/Navigation";
 import { format, isSameDay } from "date-fns";
 import {
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 
 export default function AnalysisPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
 
@@ -361,53 +364,78 @@ export default function AnalysisPage() {
 
         {/* Best Ideas */}
         <div className="mb-4 sm:mb-6 pb-4">
-          <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
+          <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 rounded-xl shadow-lg">
+              <Lightbulb className="w-5 h-5 sm:w-6 sm:h-6 text-white flex-shrink-0" />
+            </div>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">
               Best Ideas Suggestions
             </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {bestIdeas.length === 0 ? (
-              <div className="col-span-full p-4 sm:p-6 bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-2xl border border-slate-200/50 dark:border-slate-700/50 text-center text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                No ideas available
+              <div className="col-span-full p-6 sm:p-8 bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-2xl border border-slate-200/50 dark:border-slate-700/50 text-center">
+                <Lightbulb className="w-12 h-12 sm:w-16 sm:h-16 text-slate-400 dark:text-slate-500 mx-auto mb-3 sm:mb-4" />
+                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 font-medium">
+                  No ideas available yet
+                </p>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-500 mt-1">
+                  Start adding ideas to see suggestions here
+                </p>
               </div>
             ) : (
               bestIdeas.map((idea: any) => (
                 <div
                   key={idea._id}
-                  className="p-3 sm:p-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl sm:rounded-2xl border border-amber-200/50 dark:border-amber-800/50 hover:shadow-md transition-shadow"
+                  className="group relative overflow-hidden p-4 sm:p-5 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-amber-900/30 dark:via-orange-900/20 dark:to-yellow-900/20 rounded-xl sm:rounded-2xl border-2 border-amber-200/60 dark:border-amber-800/60 hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-lg transition-all duration-300"
                 >
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm sm:text-base text-slate-900 dark:text-slate-100 font-medium mb-2 sm:mb-3 line-clamp-2 sm:line-clamp-3 break-words">
-                        {idea.text}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
-                        {idea.priority && (
-                          <span className="px-2 py-0.5 sm:py-1 bg-amber-200 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded-lg text-xs font-semibold whitespace-nowrap">
-                            {idea.priority}
-                          </span>
-                        )}
-                        {idea.tags &&
-                          idea.tags.slice(0, 2).map((tag: string, idx: number) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-0.5 sm:py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs truncate max-w-[100px] sm:max-w-none"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        {idea.tags && idea.tags.length > 2 && (
-                          <span className="px-2 py-0.5 sm:py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs">
-                            +{idea.tags.length - 2}
-                          </span>
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-amber-200/20 to-orange-200/20 dark:from-amber-500/10 dark:to-orange-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
+                      <div className="p-2 sm:p-2.5 bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 rounded-lg shadow-md flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
+                        <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm sm:text-base md:text-lg text-slate-900 dark:text-slate-100 font-semibold mb-2 sm:mb-3 line-clamp-3 break-words leading-relaxed">
+                          {idea.text || idea.description || idea.subTopic || "No description"}
+                        </p>
+                        {(idea.subTopic || idea.description) && idea.text && (
+                          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-2 line-clamp-2">
+                            {idea.subTopic || idea.description}
+                          </p>
                         )}
                       </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+                      {idea.priority && idea.priority !== "normal" && (
+                        <span className="px-2.5 py-1 sm:py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 text-white rounded-lg text-xs font-bold shadow-sm">
+                          {idea.priority.charAt(0).toUpperCase() + idea.priority.slice(1)}
+                        </span>
+                      )}
+                      {idea.tags &&
+                        idea.tags.slice(0, 2).map((tag: string, idx: number) => (
+                          <span
+                            key={idx}
+                            className="px-2.5 py-1 sm:py-1.5 bg-slate-200/80 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium truncate max-w-[120px] sm:max-w-none"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      {idea.tags && idea.tags.length > 2 && (
+                        <span className="px-2.5 py-1 sm:py-1.5 bg-slate-200/80 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium">
+                          +{idea.tags.length - 2}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between pt-2 sm:pt-3 border-t border-amber-200/50 dark:border-amber-800/50">
+                      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
                         {format(new Date(idea.createdAt), "MMM d, yyyy")}
                       </p>
+                      {idea.topicId && (
+                        <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                          📌 Topic
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -416,7 +444,6 @@ export default function AnalysisPage() {
           </div>
         </div>
       </div>
-
       <Navigation />
     </div>
   );

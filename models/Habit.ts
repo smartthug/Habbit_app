@@ -3,11 +3,15 @@ import mongoose, { Schema, Document, Model, Types } from "mongoose";
 export interface IHabit extends Document {
   userId: Types.ObjectId;
   name: string;
-  category: "health" | "learning" | "business" | "personal" | "custom";
-  frequency: "daily" | "weekly" | "custom";
+  category: "family" | "business" | "personal" | "work" | "workBlock" | "productive" | "familyTime" | "custom" | "journal";
+  startTime?: string; // Time slot start time (HH:mm format)
+  endTime?: string; // Time slot end time (HH:mm format)
+  timeline?: number; // Timeline in days (30, 60, 90, etc.)
+  frequency: "daily" | "weekly" | "monthly" | "yearly" | "custom";
   priority: "low" | "medium" | "high";
   reminderTime?: string;
   ideaGenerating?: boolean;
+  completionPercentage?: number; // Calculated completion percentage
   createdAt: Date;
 }
 
@@ -26,12 +30,22 @@ const HabitSchema: Schema = new Schema(
     },
     category: {
       type: String,
-      enum: ["health", "learning", "business", "personal", "custom"],
+      enum: ["family", "business", "personal", "work", "workBlock", "productive", "familyTime", "custom", "journal"],
       default: "personal",
+    },
+    startTime: {
+      type: String,
+    },
+    endTime: {
+      type: String,
+    },
+    timeline: {
+      type: Number,
+      min: 1,
     },
     frequency: {
       type: String,
-      enum: ["daily", "weekly", "custom"],
+      enum: ["daily", "weekly", "monthly", "yearly", "custom"],
       default: "daily",
     },
     priority: {
@@ -45,6 +59,12 @@ const HabitSchema: Schema = new Schema(
     ideaGenerating: {
       type: Boolean,
       default: false,
+    },
+    completionPercentage: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
     },
   },
   {

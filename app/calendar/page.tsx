@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getCalendarEvents, deleteCalendarEvent } from "@/app/actions/calendar";
+import { getTodayJournalCount } from "@/app/actions/journal";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalendarIcon, Clock, MapPin, Bell, Repeat } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import CalendarEventModal from "@/components/CalendarEventModal";
-import { useRouter } from "next/navigation";
 
 export default function CalendarPage() {
   const router = useRouter();

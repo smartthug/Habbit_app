@@ -23,8 +23,8 @@ export default function SignupPage() {
         setError(result.error);
         setIsPending(false);
       } else if (result?.success) {
-        // Cookies are set, now redirect
-        window.location.href = "/dashboard";
+        // Cookies are set, now redirect to profile setup
+        window.location.href = "/profile-setup";
       }
     } catch (err: any) {
       console.error("Signup error:", err);

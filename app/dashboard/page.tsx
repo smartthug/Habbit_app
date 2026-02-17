@@ -1,14 +1,17 @@
 import { getCurrentUser } from "@/lib/auth";
-import { getTodayHabits } from "@/app/actions/habits";
+import { getTodayHabits, checkHabitRequirements } from "@/app/actions/habits";
 import { getIdeas } from "@/app/actions/ideas";
+import { getTodayJournalCount } from "@/app/actions/journal";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Plus, Target, Lightbulb, TrendingUp } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import AddModal from "@/components/AddModal";
+import DynamicQuote from "@/components/DynamicQuote";
 import { debugAuth } from "@/lib/auth-debug";
 import connectDB from "@/lib/db";
 import User from "@/models/User";
+import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
   // Debug in development only
@@ -21,17 +24,24 @@ export default async function DashboardPage() {
     return null;
   }
 
-  // Fetch full user data from database to get the name
+  // Fetch full user data from database to get the name and check profile setup
   let user;
   try {
     await connectDB();
-    const dbUser = await User.findById(tokenUser.userId);
+    const dbUser = await User.findById(tokenUser.userId).select("name email timeCategories profileSetupCompleted");
     if (!dbUser) {
       return null;
     }
+
+    // Check if profile setup is completed
+    if (!dbUser.profileSetupCompleted) {
+      redirect("/profile-setup");
+    }
+
     user = {
       name: dbUser.name,
       email: dbUser.email,
+      timeCategories: dbUser.timeCategories || null,
     };
   } catch (error) {
     console.error("Error fetching user:", error);
@@ -39,6 +49,7 @@ export default async function DashboardPage() {
     user = {
       name: tokenUser.email.split("@")[0],
       email: tokenUser.email,
+      timeCategories: null,
     };
   }
 
@@ -56,12 +67,41 @@ export default async function DashboardPage() {
   }
 
   const todayHabits = todayHabitsResult.success ? todayHabitsResult.habits : [];
+  const habitsByCategory = todayHabitsResult.success && todayHabitsResult.habitsByCategory 
+    ? todayHabitsResult.habitsByCategory 
+    : {};
   const allIdeasResult = recentIdeasResult.success ? recentIdeasResult.ideas : [];
   const totalIdeasCount = allIdeasResult.length;
 
   const completedCount = todayHabits.filter((h: any) => h.todayStatus === "done").length;
   const totalCount = todayHabits.length;
   const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  // Check habit requirements
+  const habitRequirementsResult = await checkHabitRequirements();
+  const habitRequirements = habitRequirementsResult.success ? habitRequirementsResult : null;
+
+  // Check journal entries requirement (for display purposes only)
+  const journalCountResult = await getTodayJournalCount();
+  const journalCount = journalCountResult.success ? journalCountResult.count : 0;
+
+  // Category display names
+  const categoryNames: Record<string, string> = {
+    personal: "Personal",
+    work: "Work",
+    family: "Family",
+    business: "Business",
+    journal: "Journal",
+    custom: "Custom",
+  };
+
+  const coreCategoryNames: Record<string, string> = {
+    personal: "Personal",
+    workBlock: "Work Block",
+    productive: "Productive",
+    familyTime: "Family Time",
+    journal: "Journal",
+  };
 
   const greeting = () => {
     const hour = new Date().getHours();
@@ -80,7 +120,43 @@ export default async function DashboardPage() {
           <p className="text-slate-600 dark:text-slate-400 mt-3 md:mt-4 text-base md:text-lg lg:text-xl font-semibold tracking-wide">
             {format(new Date(), "EEEE, MMMM d, yyyy")}
           </p>
+          <DynamicQuote timeAllocation={user.timeCategories} />
         </div>
+
+        {/* Habit Requirements Status */}
+        {habitRequirements && !habitRequirements.isComplete && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-6 mb-6 shadow-premium-lg">
+            <h3 className="text-lg font-bold text-amber-900 dark:text-amber-100 mb-4 flex items-center gap-2">
+              <Target className="w-5 h-5" />
+              Habit Requirements
+            </h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-800 dark:text-amber-200">Minimum 5 habits:</span>
+                <span className={`font-semibold ${habitRequirements.hasMinimumHabits ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
+                  {habitRequirements.totalHabits}/{habitRequirements.requiredHabits}
+                </span>
+              </div>
+              {habitRequirements.missingCategories && habitRequirements.missingCategories.length > 0 && (
+                <div>
+                  <span className="text-amber-800 dark:text-amber-200">Missing categories:</span>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {habitRequirements.missingCategories.map((cat: string) => (
+                      <span key={cat} className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-800 dark:text-amber-200 font-medium text-xs">
+                        {coreCategoryNames[cat] || cat}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!habitRequirements.journalExists && (
+                <div className="text-amber-800 dark:text-amber-200">
+                  <span className="font-semibold">⚠️ Journal habit is required</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Today's Summary - Premium Card */}
         <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-3xl p-6 md:p-8 lg:p-10 mb-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50 animate-scale-in">
@@ -113,6 +189,68 @@ export default async function DashboardPage() {
           )}
           </div>
         </div>
+
+        {/* Habits by Category */}
+        {totalCount > 0 && Object.keys(habitsByCategory).length > 0 && (
+          <div className="space-y-6 mb-6">
+            {Object.entries(habitsByCategory).map(([category, habits]: [string, any[]]) => (
+              <div
+                key={category}
+                className="relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50"
+              >
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-400/0 to-purple-400/0 dark:from-indigo-400/0 dark:to-purple-400/0 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                <div className="relative z-10">
+                  <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-slate-100 mb-4 capitalize">
+                    {categoryNames[category] || category}
+                  </h3>
+                  <div className="space-y-3">
+                    {habits.map((habit: any) => {
+                      const habitCompletion = habit.completionPercentage || 0;
+                      const isDone = habit.todayStatus === "done";
+                      return (
+                        <div
+                          key={habit._id}
+                          className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200/50 dark:border-slate-700/50"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                                {habit.name}
+                              </h4>
+                              {habit.startTime && habit.endTime && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                  {habit.startTime} - {habit.endTime}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right ml-4">
+                              <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                {habitCompletion}%
+                              </div>
+                              <div className={`text-xs ${isDone ? "text-green-600 dark:text-green-400" : "text-slate-500 dark:text-slate-400"}`}>
+                                {isDone ? "Done" : "Pending"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-200/80 dark:bg-slate-700/80 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                isDone
+                                  ? "bg-gradient-to-r from-green-500 to-emerald-600"
+                                  : "bg-gradient-to-r from-indigo-500 to-purple-600"
+                              }`}
+                              style={{ width: `${habitCompletion}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Quick Actions - Premium Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
@@ -156,20 +294,20 @@ export default async function DashboardPage() {
 
         {/* Streak Indicator - Premium */}
         {totalCount > 0 && (
-          <div className="relative overflow-hidden rounded-3xl p-6 md:p-8 lg:p-10 text-white shadow-premium-xl animate-scale-in">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600"></div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-            <div className="absolute inset-0 opacity-30" style={{
+          <div className="relative overflow-hidden rounded-3xl p-6 md:p-8 lg:p-10 text-white shadow-premium-xl animate-scale-in mb-6">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-500 dark:via-purple-500 dark:to-pink-500"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
+            <div className="absolute inset-0 opacity-20" style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
             }}></div>
-            <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6 z-10">
               <div>
-                <p className="text-sm md:text-base opacity-90 mb-2 font-semibold tracking-wide">Current Streak</p>
-                <p className="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-2">🔥 {completionRate > 0 ? "1" : "0"}</p>
-                <p className="text-base md:text-lg font-bold mb-1">days</p>
-                <p className="text-xs md:text-sm opacity-90 mt-2 font-medium">Keep it going!</p>
+                <p className="text-sm md:text-base opacity-100 mb-2 font-bold tracking-wide text-white drop-shadow-lg">Current Streak</p>
+                <p className="text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold mb-2 drop-shadow-2xl">🔥 {completionRate > 0 ? "1" : "0"}</p>
+                <p className="text-base md:text-lg font-bold mb-1 text-white drop-shadow-lg">days</p>
+                <p className="text-xs md:text-sm opacity-100 mt-2 font-semibold text-white drop-shadow">Keep it going! 💪</p>
               </div>
-              <TrendingUp className="w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 opacity-90 animate-pulse" />
+              <TrendingUp className="w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 opacity-100 text-white drop-shadow-lg animate-pulse flex-shrink-0" />
             </div>
           </div>
         )}

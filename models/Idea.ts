@@ -5,6 +5,9 @@ export interface IIdea extends Document {
   topicId?: Types.ObjectId;
   habitId?: Types.ObjectId;
   text: string;
+  subTopic?: string;
+  description?: string;
+  conceptExplanation?: string;
   tags: string[];
   priority: "normal" | "important";
   createdAt: Date;
@@ -28,7 +31,18 @@ const IdeaSchema: Schema = new Schema(
     },
     text: {
       type: String,
-      required: [true, "Idea text is required"],
+      trim: true,
+    },
+    subTopic: {
+      type: String,
+      trim: true,
+    },
+    description: {
+      type: String,
+      trim: true,
+    },
+    conceptExplanation: {
+      type: String,
       trim: true,
     },
     tags: {

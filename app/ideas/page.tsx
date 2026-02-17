@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { getIdeas, deleteIdea } from "@/app/actions/ideas";
 import { getTopics } from "@/app/actions/topics";
 import { getHabits } from "@/app/actions/habits";
-import { Search, Filter, X, Trash2, Lightbulb, Star } from "lucide-react";
+import { Search, Filter, X, Trash2, Lightbulb, Star, BookOpen } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import AddModal from "@/components/AddModal";
+import JournalPage from "@/components/JournalPage";
 import { format } from "date-fns";
 
 export default function IdeasPage() {
+  const searchParams = useSearchParams();
+  const [showJournal, setShowJournal] = useState(false);
   const [ideas, setIdeas] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
   const [habits, setHabits] = useState<any[]>([]);
@@ -24,7 +28,11 @@ export default function IdeasPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+    // Check if journal query parameter is set
+    if (searchParams?.get("journal") === "true") {
+      setShowJournal(true);
+    }
+  }, [searchParams]);
 
   const loadIdeas = useCallback(async () => {
     const filters: any = {};
@@ -58,7 +66,8 @@ export default function IdeasPage() {
       setTopics(topicsResult.topics);
     }
     if (habitsResult.success) {
-      setHabits(habitsResult.habits);
+      // Filter to show only available habits (habits that exist)
+      setHabits(habitsResult.habits.filter((h: any) => h && h.name));
     }
     setLoading(false);
   }
@@ -109,6 +118,10 @@ export default function IdeasPage() {
     );
   }
 
+  if (showJournal) {
+    return <JournalPage onBack={() => setShowJournal(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
       <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
@@ -119,13 +132,23 @@ export default function IdeasPage() {
             </h1>
             <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base mt-1 font-medium">Capture and organize your thoughts</p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="tap-target w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg active:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center touch-active no-select"
-            aria-label="Add new idea"
-          >
-            <span className="text-2xl sm:text-3xl font-bold">+</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowJournal(true)}
+              className="tap-target px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg active:shadow-xl active:scale-95 transition-all duration-200 flex items-center gap-2 touch-active no-select text-sm sm:text-base font-semibold"
+              aria-label="Open Journal"
+            >
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Journal</span>
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="tap-target w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg active:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center touch-active no-select"
+              aria-label="Add new idea"
+            >
+              <span className="text-2xl sm:text-3xl font-bold">+</span>
+            </button>
+          </div>
         </div>
 
         {/* Search */}

@@ -8,9 +8,12 @@ import Topic from "@/models/Topic";
 import mongoose from "mongoose";
 
 const createIdeaSchema = z.object({
-  text: z.string().min(1, "Idea text is required"),
+  text: z.string().optional(),
   topicId: z.string().optional(),
   habitId: z.string().optional(),
+  subTopic: z.string().optional(),
+  description: z.string().optional(),
+  conceptExplanation: z.string().optional(),
   tags: z.array(z.string()).optional(),
   priority: z.enum(["normal", "important"]).optional(),
 });
@@ -21,19 +24,60 @@ export async function createIdea(formData: FormData) {
     await connectDB();
 
     const rawData = {
-      text: (formData.get("text") as string) || "",
+      text: (formData.get("text") as string) || undefined,
       topicId: (formData.get("topicId") as string) || undefined,
       habitId: (formData.get("habitId") as string) || undefined,
+      subTopic: (formData.get("subTopic") as string) || undefined,
+      description: (formData.get("description") as string) || undefined,
+      conceptExplanation: (formData.get("conceptExplanation") as string) || undefined,
       tags: formData.get("tags") ? (formData.get("tags") as string).split(",").map((t) => t.trim()).filter((t) => t) : [],
       priority: (formData.get("priority") as string) || "normal",
     };
 
     const validatedData = createIdeaSchema.parse(rawData);
+    
+    // Use description or subTopic as text if text is not provided
+    const ideaText = validatedData.text || validatedData.description || validatedData.subTopic || "";
+    
+    if (!ideaText.trim()) {
+      return { error: "At least one field (Description or Sub Topic) must be filled" };
+    }
+
+    let topicId = validatedData.topicId ? new mongoose.Types.ObjectId(validatedData.topicId) : undefined;
+
+    // If habit is selected but no topic is provided, create/find topic based on habit name
+    if (validatedData.habitId && !validatedData.topicId) {
+      // Get the habit to get its name
+      const Habit = (await import("@/models/Habit")).default;
+      const habit = await Habit.findOne({
+        _id: validatedData.habitId,
+        userId: user.userId,
+      });
+
+      if (habit) {
+        // Find or create a topic with the habit's name
+        let topic = await Topic.findOne({
+          name: habit.name,
+          userId: user.userId,
+          archived: false,
+        });
+
+        if (!topic) {
+          // Create a new topic with the habit's name
+          topic = await Topic.create({
+            userId: new mongoose.Types.ObjectId(user.userId),
+            name: habit.name,
+          });
+        }
+
+        topicId = topic._id;
+      }
+    }
 
     // Verify topic belongs to user if provided
-    if (validatedData.topicId) {
+    if (topicId) {
       const topic = await Topic.findOne({
-        _id: validatedData.topicId,
+        _id: topicId,
         userId: user.userId,
       });
       if (!topic) {
@@ -43,9 +87,12 @@ export async function createIdea(formData: FormData) {
 
     const idea = await Idea.create({
       userId: new mongoose.Types.ObjectId(user.userId),
-      text: validatedData.text,
-      topicId: validatedData.topicId ? new mongoose.Types.ObjectId(validatedData.topicId) : undefined,
+      text: ideaText,
+      topicId: topicId,
       habitId: validatedData.habitId ? new mongoose.Types.ObjectId(validatedData.habitId) : undefined,
+      subTopic: validatedData.subTopic,
+      description: validatedData.description,
+      conceptExplanation: validatedData.conceptExplanation,
       tags: validatedData.tags || [],
       priority: validatedData.priority || "normal",
     });

@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:https": "node server.js",
+    "setup:https": "node setup-https.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -31,6 +33,7 @@
     "eslint-config-next": "^14.2.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "devcert": "^1.2.2"
   }
 }
