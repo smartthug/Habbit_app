@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getIdeas, deleteIdea } from "@/app/actions/ideas";
 import { getTopics } from "@/app/actions/topics";
@@ -11,7 +11,7 @@ import AddModal from "@/components/AddModal";
 import JournalPage from "@/components/JournalPage";
 import { format } from "date-fns";
 
-export default function IdeasPage() {
+function IdeasPageContent() {
   const searchParams = useSearchParams();
   const [showJournal, setShowJournal] = useState(false);
   const [ideas, setIdeas] = useState<any[]>([]);
@@ -336,5 +336,20 @@ export default function IdeasPage() {
       <AddModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} defaultTab="idea" />
       <Navigation />
     </div>
+  );
+}
+
+export default function IdeasPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-amber-200 dark:border-amber-800 border-t-amber-600 dark:border-t-amber-400 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400 font-medium">Loading ideas...</p>
+        </div>
+      </div>
+    }>
+      <IdeasPageContent />
+    </Suspense>
   );
 }

@@ -67,7 +67,7 @@ export default async function DashboardPage() {
   }
 
   const todayHabits = todayHabitsResult.success ? todayHabitsResult.habits : [];
-  const habitsByCategory = todayHabitsResult.success && todayHabitsResult.habitsByCategory 
+  const habitsByCategory: Record<string, any[]> = todayHabitsResult.success && todayHabitsResult.habitsByCategory 
     ? todayHabitsResult.habitsByCategory 
     : {};
   const allIdeasResult = recentIdeasResult.success ? recentIdeasResult.ideas : [];

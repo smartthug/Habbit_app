@@ -15,10 +15,6 @@ export const metadata: Metadata = {
   title: "Habit Cracker - Personal Habit Tracker & Idea Vault",
   description: "A thinking partner, not just a tracker",
   manifest: "/manifest.json",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#667eea" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
-  ],
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -32,6 +28,10 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#667eea" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+  ],
 };
 
 export default function RootLayout({
