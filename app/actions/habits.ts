@@ -21,15 +21,8 @@ const createHabitSchema = z.object({
   ideaGenerating: z.boolean().optional(),
 });
 
-// Time limits in minutes for individual habits
-const TIME_LIMITS = {
-  personal: { min: 75, max: 150 }, // 1h15min - 2h30min
-  work: { min: 120, max: 240 }, // 2h - 4h
-  workBlock: { min: 120, max: 240 }, // 2h - 4h
-  productive: { min: 105, max: 210 }, // 1h45min - 3h30min
-  familyTime: { min: 60, max: 120 }, // 1h - 2h
-  journal: { min: 30, max: 60 }, // 30min - 1h
-};
+// TIME_LIMITS removed - duration validation is handled in profile setup
+// Only range and overlap checks are needed here
 
 // Helper function to convert time string (HH:MM) to minutes
 function timeToMinutes(time: string): number {
@@ -78,6 +71,39 @@ function getCategoryDisplayName(category: string): string {
     journal: "Journal",
   };
   return names[category] || category;
+}
+
+// Helper function to check if two time ranges overlap
+function timeRangesOverlap(
+  start1: string,
+  end1: string,
+  start2: string,
+  end2: string
+): boolean {
+  if (!start1 || !end1 || !start2 || !end2) return false;
+  
+  const s1 = timeToMinutes(start1);
+  const e1 = timeToMinutes(end1);
+  const s2 = timeToMinutes(start2);
+  const e2 = timeToMinutes(end2);
+  
+  // Handle wrap-around (e.g., 23:00 to 01:00)
+  const wraps1 = e1 < s1;
+  const wraps2 = e2 < s2;
+  
+  if (wraps1 && wraps2) {
+    return true;
+  }
+  
+  if (wraps1) {
+    return (s2 >= s1 && s2 < 24 * 60) || (e2 > 0 && e2 <= e1) || (s2 < e1);
+  }
+  
+  if (wraps2) {
+    return (s1 >= s2 && s1 < 24 * 60) || (e1 > 0 && e1 <= e2) || (s1 < e2);
+  }
+  
+  return !(e1 <= s2 || e2 <= s1);
 }
 
 // Check if a time range is completely within another time range
@@ -145,29 +171,9 @@ export async function createHabit(formData: FormData) {
     const validatedData = createHabitSchema.parse(rawData);
 
     // Validate time slot if provided
+    // Only validates: time within allocated range and no overlaps
+    // Duration min/max checks are NOT needed - already validated in profile setup
     if (validatedData.startTime && validatedData.endTime) {
-      const duration = calculateDuration(validatedData.startTime, validatedData.endTime);
-      
-      // Check individual habit min/max limits
-      const limits = TIME_LIMITS[validatedData.category as keyof typeof TIME_LIMITS];
-      if (limits) {
-        if (duration < limits.min) {
-          const minHours = Math.floor(limits.min / 60);
-          const minMins = limits.min % 60;
-          return { 
-            error: `${getCategoryDisplayName(validatedData.category)} habit duration (${Math.floor(duration / 60)}h ${duration % 60}min) is less than the minimum required time of ${minHours}h ${minMins}min` 
-          };
-        }
-        if (duration > limits.max) {
-          const maxHours = Math.floor(limits.max / 60);
-          const maxMins = limits.max % 60;
-          return { 
-            error: `${getCategoryDisplayName(validatedData.category)} habit duration (${Math.floor(duration / 60)}h ${duration % 60}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min` 
-          };
-        }
-      }
-
-      // Check if habit time slot is within category's allocated time range
       const timeAllocationKey = mapCategoryToTimeAllocation(validatedData.category);
       if (timeAllocationKey) {
         // Get user profile to access time allocation
@@ -175,7 +181,7 @@ export async function createHabit(formData: FormData) {
         if (dbUser && dbUser.timeCategories) {
           const timeCategory = (dbUser.timeCategories as any)[timeAllocationKey];
           
-          // Check if habit time is within the allocated time range
+          // FIRST: Check if habit time is within the allocated time range
           if (timeCategory && timeCategory.startTime && timeCategory.endTime) {
             if (!isTimeRangeWithin(
               validatedData.startTime,
@@ -188,38 +194,35 @@ export async function createHabit(formData: FormData) {
               };
             }
           }
-          
-          if (timeCategory && timeCategory.totalHours) {
-            // Get all existing habits in the same category
-            const existingHabits = await Habit.find({
-              userId: user.userId,
-              category: validatedData.category,
-              startTime: { $exists: true, $ne: null },
-              endTime: { $exists: true, $ne: null },
-            }).select("startTime endTime").lean();
 
-            // Calculate total duration of existing habits
-            let totalExistingMinutes = 0;
-            existingHabits.forEach((habit: any) => {
-              if (habit.startTime && habit.endTime) {
-                totalExistingMinutes += calculateDuration(habit.startTime, habit.endTime);
-              }
-            });
+          // SECOND: Check for overlaps with existing habits in the same category
+          const existingHabits = await Habit.find({
+            userId: user.userId,
+            $or: [
+              { category: validatedData.category },
+              // Handle related categories
+              ...(validatedData.category === "work" ? [{ category: "workBlock" }] : []),
+              ...(validatedData.category === "workBlock" ? [{ category: "work" }] : []),
+            ],
+            startTime: { $exists: true, $ne: null },
+            endTime: { $exists: true, $ne: null },
+          }).select("name startTime endTime").lean();
 
-            // Add new habit duration
-            const totalMinutes = totalExistingMinutes + duration;
-            const allocatedMinutes = timeCategory.totalHours * 60;
+          // Check for overlaps
+          const overlappingHabit = existingHabits.find((habit: any) => {
+            if (!habit.startTime || !habit.endTime) return false;
+            return timeRangesOverlap(
+              validatedData.startTime!,
+              validatedData.endTime!,
+              habit.startTime,
+              habit.endTime
+            );
+          });
 
-            if (totalMinutes > allocatedMinutes) {
-              const totalHours = Math.floor(totalMinutes / 60);
-              const totalMins = totalMinutes % 60;
-              const allocatedHours = Math.floor(allocatedMinutes / 60);
-              const allocatedMins = allocatedMinutes % 60;
-              
-              return {
-                error: `Total ${getCategoryDisplayName(validatedData.category)} habit time (${totalHours}h ${totalMins}min) exceeds allocated ${getCategoryDisplayName(validatedData.category)} Time (${allocatedHours}h ${allocatedMins}min) in your profile. Please reduce the duration or adjust your profile allocation.`
-              };
-            }
+          if (overlappingHabit) {
+            return {
+              error: `Time slot overlaps with existing habit "${overlappingHabit.name}" (${overlappingHabit.startTime} - ${overlappingHabit.endTime}). Please choose a different time slot.`
+            };
           }
         }
       }

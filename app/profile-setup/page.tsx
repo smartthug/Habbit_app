@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { saveProfileSetup, checkProfileSetup } from "@/app/actions/profile";
-import { User, Calendar, Briefcase, MapPin, Info, Clock, BookOpen, Users, Target, Zap } from "lucide-react";
+import { User, Calendar, Briefcase, MapPin, Info, Clock, BookOpen, Users, Target, Zap, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 import TimeBlockCard from "@/components/TimeBlockCard";
 import { format } from "date-fns";
 
@@ -86,6 +86,7 @@ export default function ProfileSetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
+  const [currentStep, setCurrentStep] = useState<"personal" | "time">("time");
   const [formData, setFormData] = useState({
     name: "",
     dateOfBirth: "",
@@ -123,8 +124,8 @@ export default function ProfileSetupPage() {
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="animate-pulse text-slate-400">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-purple-50/30 to-indigo-50/50 dark:from-slate-950 dark:via-purple-950/20 dark:to-indigo-950/30">
+        <div className="animate-pulse text-slate-400 dark:text-slate-500">Loading...</div>
       </div>
     );
   }
@@ -264,6 +265,10 @@ export default function ProfileSetupPage() {
     return age >= 0 ? age : null;
   }
 
+  function canProceedToTimeAllocation(): boolean {
+    return !!(formData.name && formData.dateOfBirth && formData.profession && formData.pinCode);
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -290,157 +295,180 @@ export default function ProfileSetupPage() {
 
   const age = calculateAge(formData.dateOfBirth);
   const maxDate = new Date().toISOString().split("T")[0];
+  const isPersonalInfoComplete = canProceedToTimeAllocation();
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-3 sm:px-4 md:px-6 lg:px-8 pt-4 sm:pt-6 md:pt-8 lg:pt-12 pb-4 sm:pb-6 md:pb-8 lg:pb-12">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-indigo-50/50 dark:from-slate-950 dark:via-purple-950/20 dark:to-indigo-950/30 pb-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 lg:pt-12">
         {/* Header */}
-        <div className="text-center mb-6 sm:mb-8 md:mb-10 lg:mb-12">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent mb-2 sm:mb-3 md:mb-4">
+        <div className="text-center mb-8 sm:mb-10 lg:mb-12">
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 mb-4 sm:mb-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
+            <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+          </div>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent mb-3 sm:mb-4">
             Complete Your Profile
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm md:text-base">
-            Let's set up your profile to get started
+          <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base md:text-lg max-w-2xl mx-auto">
+            Let's set up your profile to personalize your experience and optimize your daily schedule
           </p>
         </div>
 
+
         {/* Form */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl md:rounded-3xl shadow-lg p-4 sm:p-6 md:p-8 lg:p-10">
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-xl border border-slate-200/50 dark:border-slate-700/50 p-6 sm:p-8 lg:p-10">
           {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
-              {error}
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-red-600 dark:text-red-400 text-sm font-medium">{error}</p>
+              </div>
             </div>
           )}
 
-          <form className="space-y-4 sm:space-y-5 md:space-y-6" onSubmit={handleSubmit}>
-            {/* Name */}
-            <div>
-              <label htmlFor="name" className="block text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
-                Full Name
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
-                  <User className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
-                </div>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  className="block w-full pl-9 sm:pl-10 md:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 md:py-3.5 text-sm sm:text-base border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                  placeholder="John Doe"
-                />
-              </div>
-            </div>
-
-            {/* Date of Birth */}
-            <div>
-              <label htmlFor="dateOfBirth" className="block text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
-                Date of Birth
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
-                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
-                </div>
-                <input
-                  id="dateOfBirth"
-                  name="dateOfBirth"
-                  type="date"
-                  value={formData.dateOfBirth}
-                  onChange={handleChange}
-                  max={maxDate}
-                  required
-                  className="block w-full pl-9 sm:pl-10 md:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 md:py-3.5 text-sm sm:text-base border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                />
-              </div>
-              {age !== null && (
-                <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                  Age: <span className="font-semibold">{age} years</span>
+          <form className="space-y-8" onSubmit={handleSubmit}>
+            {/* Personal Information Section */}
+            <div className="transition-all duration-500">
+              <div className="mb-6">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+                  Personal Information
+                </h2>
+                <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
+                  Tell us a bit about yourself
                 </p>
-              )}
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
-                Your birthday will be added to the calendar for reminders
-              </p>
-            </div>
-
-            {/* Profession */}
-            <div>
-              <label htmlFor="profession" className="block text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
-                Profession
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
-                  <Briefcase className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
-                </div>
-                <select
-                  id="profession"
-                  name="profession"
-                  value={formData.profession}
-                  onChange={handleChange}
-                  required
-                  className="block w-full pl-9 sm:pl-10 md:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 md:py-3.5 text-sm sm:text-base border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all appearance-none"
-                >
-                  <option value="">Select your profession</option>
-                  <option value="Student">Student</option>
-                  <option value="Housewife">Housewife</option>
-                  <option value="Employee">Employee</option>
-                  <option value="Business Owner">Business Owner</option>
-                  <option value="Freelancer">Freelancer</option>
-                  <option value="Retired">Retired</option>
-                  <option value="Other">Other</option>
-                </select>
               </div>
-            </div>
 
-            {/* Pin Code */}
-            <div>
-              <label htmlFor="pinCode" className="block text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
-                <div className="flex items-center gap-2">
-                  <span>Pin Code</span>
-                  <div className="group relative">
-                    <Info className="h-3 w-3 sm:h-4 sm:w-4 text-slate-400 cursor-help" />
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-40 sm:w-48 md:w-64 p-2 bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                      This data helps connect you with people in your area who share similar interests
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+                {/* Name */}
+                <div className="md:col-span-2">
+                  <label htmlFor="name" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-slate-400" />
                     </div>
+                    <input
+                      id="name"
+                      name="name"
+                      type="text"
+                      value={formData.name}
+                      onChange={handleChange}
+                      required
+                      className="block w-full pl-12 pr-4 py-3.5 text-base border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                      placeholder="Enter your full name"
+                    />
                   </div>
                 </div>
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
-                  <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
+
+                {/* Date of Birth */}
+                <div>
+                  <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Date of Birth
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Calendar className="h-5 w-5 text-slate-400" />
+                    </div>
+                    <input
+                      id="dateOfBirth"
+                      name="dateOfBirth"
+                      type="date"
+                      value={formData.dateOfBirth}
+                      onChange={handleChange}
+                      max={maxDate}
+                      required
+                      className="block w-full pl-12 pr-4 py-3.5 text-base border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                  {age !== null && (
+                    <p className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 font-medium">
+                      Age: {age} years
+                    </p>
+                  )}
                 </div>
-                <input
-                  id="pinCode"
-                  name="pinCode"
-                  type="text"
-                  value={formData.pinCode}
-                  onChange={handleChange}
-                  required
-                  maxLength={10}
-                  className="block w-full pl-9 sm:pl-10 md:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 md:py-3.5 text-sm sm:text-base border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                  placeholder="123456"
-                />
+
+                {/* Profession */}
+                <div>
+                  <label htmlFor="profession" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Profession
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Briefcase className="h-5 w-5 text-slate-400" />
+                    </div>
+                    <select
+                      id="profession"
+                      name="profession"
+                      value={formData.profession}
+                      onChange={handleChange}
+                      required
+                      className="block w-full pl-12 pr-4 py-3.5 text-base border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="">Select your profession</option>
+                      <option value="Student">Student</option>
+                      <option value="Housewife">Housewife</option>
+                      <option value="Employee">Employee</option>
+                      <option value="Business Owner">Business Owner</option>
+                      <option value="Freelancer">Freelancer</option>
+                      <option value="Retired">Retired</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Pin Code */}
+                <div className="md:col-span-2">
+                  <label htmlFor="pinCode" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span>Pin Code</span>
+                      <div className="group relative">
+                        <Info className="h-4 w-4 text-slate-400 cursor-help" />
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 p-3 bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-xl">
+                          This helps connect you with people in your area who share similar interests
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <MapPin className="h-5 w-5 text-slate-400" />
+                    </div>
+                    <input
+                      id="pinCode"
+                      name="pinCode"
+                      type="text"
+                      value={formData.pinCode}
+                      onChange={handleChange}
+                      required
+                      maxLength={10}
+                      className="block w-full pl-12 pr-4 py-3.5 text-base border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                      placeholder="Enter your pin code"
+                    />
+                  </div>
+                </div>
               </div>
+
             </div>
 
-            {/* Time Categories Section */}
-            <div className="pt-4 sm:pt-5 md:pt-6 border-t border-slate-200 dark:border-slate-700">
-              <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3 sm:mb-4 md:mb-6">
-                Daily Time Allocation
-              </h2>
-              <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-400 mb-3 sm:mb-4 md:mb-6">
-                Select start and end times for each category. You can choose <span className="font-semibold">any duration</span> between the minimum and maximum limits shown below.
-              </p>
+            {/* Time Allocation Section */}
+            <div className="transition-all duration-500">
+              <div className="mb-6">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+                  Daily Time Allocation
+                </h2>
+                <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
+                  Set your preferred time blocks for different activities. Each category has minimum and maximum duration limits.
+                </p>
+              </div>
 
               {validationErrors.totalTime && (
-                <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 md:p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs sm:text-sm">
-                  {validationErrors.totalTime}
+                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-red-600 dark:text-red-400 text-sm">{validationErrors.totalTime}</p>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+              <div className="space-y-6 sm:space-y-8">
                 {/* Personal Work */}
                 <TimeBlockCard
                   id="personalWork"
@@ -686,6 +714,27 @@ export default function ProfileSetupPage() {
                   isEditing={true}
                 />
               </div>
+
+              {/* Submit Button */}
+              <div className="mt-8 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-600 hover:from-indigo-600 hover:via-purple-700 hover:to-pink-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2 min-w-[200px]"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Setting up...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>Complete Setup</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Hidden inputs for form submission */}
@@ -699,15 +748,6 @@ export default function ProfileSetupPage() {
             <input type="hidden" name="familyTimeEnd" value={formData.familyTimeEnd} />
             <input type="hidden" name="journalStart" value={formData.journalStart} />
             <input type="hidden" name="journalEnd" value={formData.journalEnd} />
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="tap-target w-full flex items-center justify-center gap-2 py-3 sm:py-3.5 md:py-4 px-4 sm:px-6 bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-600 hover:from-indigo-600 hover:via-purple-700 hover:to-pink-700 active:from-indigo-700 active:via-purple-800 active:to-pink-800 text-white rounded-lg font-semibold shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 min-h-[44px] sm:min-h-[48px] md:min-h-[52px] text-sm sm:text-base md:text-lg"
-            >
-              <span>{loading ? "Setting up profile..." : "Complete Setup"}</span>
-            </button>
           </form>
         </div>
       </div>

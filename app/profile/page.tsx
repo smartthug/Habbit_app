@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { logout } from "@/app/actions/auth";
-import { getUserProfile, updateTimeAllocation, updateProfilePicture } from "@/app/actions/profile";
+import { getUserProfile, updateTimeAllocation, updateProfilePicture, updateSingleTimeCategory } from "@/app/actions/profile";
 import { getTodayJournalCount } from "@/app/actions/journal";
-import { LogOut, Moon, Sun, User, Mail, Calendar, Briefcase, MapPin, Clock, Target, BookOpen, Users, Edit2, Save, X } from "lucide-react";
+import { LogOut, Moon, Sun, User, Mail, Calendar, Briefcase, MapPin, Clock, Target, BookOpen, Users, Edit2, Save, X, Plus, Minus } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import ProfilePicture from "@/components/ProfilePicture";
 import { useTheme } from "@/components/ThemeProvider";
@@ -71,14 +71,54 @@ function timeRangesOverlap(
   return !(e1 <= s2 || e2 <= s1);
 }
 
+// Helper function to convert minutes to time string (HH:MM)
+function minutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60) % 24;
+  const mins = minutes % 60;
+  return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+}
+
+// Helper function to adjust duration by keeping start time fixed and adjusting end time
+function adjustDuration(
+  startTime: string,
+  currentEndTime: string,
+  adjustmentMinutes: number,
+  minDuration: number,
+  maxDuration: number
+): string | null {
+  if (!startTime || !currentEndTime) return null;
+  
+  const currentDuration = calculateDuration(startTime, currentEndTime);
+  const newDuration = currentDuration + adjustmentMinutes;
+  
+  // Check if new duration is within limits
+  if (newDuration < minDuration || newDuration > maxDuration) {
+    return null; // Invalid adjustment
+  }
+  
+  const startMinutes = timeToMinutes(startTime);
+  let newEndMinutes = startMinutes + newDuration;
+  
+  // Handle wrapping around midnight - normalize to 0-1439 range
+  if (newEndMinutes >= 24 * 60) {
+    newEndMinutes = newEndMinutes % (24 * 60);
+  } else if (newEndMinutes < 0) {
+    newEndMinutes = (24 * 60) + (newEndMinutes % (24 * 60));
+  }
+  
+  return minutesToTime(newEndMinutes);
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const { darkMode, toggleTheme, mounted } = useTheme();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editingTimeAllocation, setEditingTimeAllocation] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [timeAllocationForm, setTimeAllocationForm] = useState<any>({});
   const [savingTimeAllocation, setSavingTimeAllocation] = useState(false);
+  const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [timeAllocationError, setTimeAllocationError] = useState("");
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [savingProfilePicture, setSavingProfilePicture] = useState(false);
@@ -253,6 +293,74 @@ export default function ProfilePage() {
     setSavingTimeAllocation(false);
   }
 
+  async function handleSaveSingleCategory(category: string) {
+    const categoryKey = category === "journaling" ? "journal" : category;
+    const startKey = category === "journaling" ? "journalStart" : `${category}Start`;
+    const endKey = category === "journaling" ? "journalEnd" : `${category}End`;
+    
+    const startTime = timeAllocationForm[startKey];
+    const endTime = timeAllocationForm[endKey];
+
+    if (!startTime || !endTime) {
+      setTimeAllocationError(`${category} start and end times are required`);
+      return;
+    }
+
+    setSavingCategory(category);
+    setTimeAllocationError("");
+
+    const result = await updateSingleTimeCategory(category, startTime, endTime);
+
+    if (result.success && result.profile) {
+      setProfile(result.profile);
+      setEditingCategory(null);
+      // Update form with saved values
+      setTimeAllocationForm({
+        ...timeAllocationForm,
+        [startKey]: startTime,
+        [endKey]: endTime,
+      });
+      // Show warnings if any habits are outside the new range
+      if (result.warnings && result.warnings.length > 0) {
+        setTimeAllocationWarnings(result.warnings);
+      } else {
+        setTimeAllocationWarnings([]);
+      }
+      router.refresh();
+    } else {
+      setTimeAllocationError(result.error || `Failed to update ${category}`);
+      setTimeAllocationWarnings([]);
+    }
+    setSavingCategory(null);
+  }
+
+  function handleEditCategory(category: string) {
+    setEditingCategory(category);
+    setTimeAllocationError("");
+    setValidationErrors({});
+  }
+
+  function handleCancelEditCategory() {
+    setEditingCategory(null);
+    setTimeAllocationError("");
+    setValidationErrors({});
+    // Reset form to current profile values
+    if (profile?.timeCategories) {
+      setTimeAllocationForm({
+        personalWorkStart: profile.timeCategories.personalWork?.startTime || "",
+        personalWorkEnd: profile.timeCategories.personalWork?.endTime || "",
+        workBlockStart: profile.timeCategories.workBlock?.startTime || "",
+        workBlockEnd: profile.timeCategories.workBlock?.endTime || "",
+        productiveStart: profile.timeCategories.productive?.startTime || "",
+        productiveEnd: profile.timeCategories.productive?.endTime || "",
+        familyTimeStart: profile.timeCategories.familyTime?.startTime || "",
+        familyTimeEnd: profile.timeCategories.familyTime?.endTime || "",
+        journalStart: profile.timeCategories.journaling?.startTime || "",
+        journalEnd: profile.timeCategories.journaling?.endTime || "",
+      });
+    }
+  }
+
   function handleCancelEdit() {
     // Reset form to current profile values
     if (profile?.timeCategories) {
@@ -272,6 +380,50 @@ export default function ProfilePage() {
     setEditingTimeAllocation(false);
     setTimeAllocationError("");
     setValidationErrors({});
+  }
+
+  function handleAdjustDuration(
+    category: string,
+    adjustmentMinutes: number
+  ) {
+    const limits = TIME_LIMITS[category as keyof typeof TIME_LIMITS];
+    if (!limits) return;
+
+    let startKey = `${category}Start` as keyof typeof timeAllocationForm;
+    let endKey = `${category}End` as keyof typeof timeAllocationForm;
+    
+    // Handle journaling category name mismatch
+    if (category === "journal") {
+      startKey = "journalStart" as keyof typeof timeAllocationForm;
+      endKey = "journalEnd" as keyof typeof timeAllocationForm;
+    }
+
+    const startTime = timeAllocationForm[startKey] as string;
+    const currentEndTime = timeAllocationForm[endKey] as string;
+
+    if (!startTime || !currentEndTime) return;
+
+    const newEndTime = adjustDuration(
+      startTime,
+      currentEndTime,
+      adjustmentMinutes,
+      limits.min,
+      limits.max
+    );
+
+    if (newEndTime) {
+      setTimeAllocationForm({
+        ...timeAllocationForm,
+        [endKey]: newEndTime,
+      });
+      // Clear validation errors for this category
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[`${category}Duration`];
+        delete newErrors[`${category}Overlap`];
+        return newErrors;
+      });
+    }
   }
 
   async function handleProfilePictureChange(base64: string) {
@@ -458,15 +610,6 @@ export default function ProfilePage() {
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-4 sm:mb-6">
                     <h2 className="font-semibold text-xl text-slate-900 dark:text-slate-100 tracking-tight">Daily Time Allocation</h2>
-                    {!editingTimeAllocation && (
-                      <button
-                        onClick={() => setEditingTimeAllocation(true)}
-                        className="tap-target flex items-center gap-2 px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors active:scale-95"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        <span className="text-sm">Edit</span>
-                      </button>
-                    )}
                   </div>
                   {timeAllocationError && (
                     <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
@@ -531,7 +674,29 @@ export default function ProfilePage() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("personalWork", -15)}
+                                    disabled={!timeAllocationForm.personalWorkStart || !timeAllocationForm.personalWorkEnd}
+                                    className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Decrease by 15 minutes"
+                                  >
+                                    -15
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("personalWork", 15)}
+                                    disabled={!timeAllocationForm.personalWorkStart || !timeAllocationForm.personalWorkEnd}
+                                    className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Increase by 15 minutes"
+                                  >
+                                    +15
+                                  </button>
+                                </div>
+                              </div>
                               <input
                                 type="time"
                                 name="personalWorkEnd"
@@ -599,7 +764,29 @@ export default function ProfilePage() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("workBlock", -15)}
+                                    disabled={!timeAllocationForm.workBlockStart || !timeAllocationForm.workBlockEnd}
+                                    className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Decrease by 15 minutes"
+                                  >
+                                    -15
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("workBlock", 15)}
+                                    disabled={!timeAllocationForm.workBlockStart || !timeAllocationForm.workBlockEnd}
+                                    className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Increase by 15 minutes"
+                                  >
+                                    +15
+                                  </button>
+                                </div>
+                              </div>
                               <input
                                 type="time"
                                 name="workBlockEnd"
@@ -667,7 +854,29 @@ export default function ProfilePage() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("productive", -15)}
+                                    disabled={!timeAllocationForm.productiveStart || !timeAllocationForm.productiveEnd}
+                                    className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Decrease by 15 minutes"
+                                  >
+                                    -15
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("productive", 15)}
+                                    disabled={!timeAllocationForm.productiveStart || !timeAllocationForm.productiveEnd}
+                                    className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Increase by 15 minutes"
+                                  >
+                                    +15
+                                  </button>
+                                </div>
+                              </div>
                               <input
                                 type="time"
                                 name="productiveEnd"
@@ -735,7 +944,29 @@ export default function ProfilePage() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("familyTime", -15)}
+                                    disabled={!timeAllocationForm.familyTimeStart || !timeAllocationForm.familyTimeEnd}
+                                    className="px-2 py-1 text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded hover:bg-pink-200 dark:hover:bg-pink-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Decrease by 15 minutes"
+                                  >
+                                    -15
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("familyTime", 15)}
+                                    disabled={!timeAllocationForm.familyTimeStart || !timeAllocationForm.familyTimeEnd}
+                                    className="px-2 py-1 text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded hover:bg-pink-200 dark:hover:bg-pink-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Increase by 15 minutes"
+                                  >
+                                    +15
+                                  </button>
+                                </div>
+                              </div>
                               <input
                                 type="time"
                                 name="familyTimeEnd"
@@ -803,7 +1034,29 @@ export default function ProfilePage() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("journal", -15)}
+                                    disabled={!timeAllocationForm.journalStart || !timeAllocationForm.journalEnd}
+                                    className="px-2 py-1 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Decrease by 15 minutes"
+                                  >
+                                    -15
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustDuration("journal", 15)}
+                                    disabled={!timeAllocationForm.journalStart || !timeAllocationForm.journalEnd}
+                                    className="px-2 py-1 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Increase by 15 minutes"
+                                  >
+                                    +15
+                                  </button>
+                                </div>
+                              </div>
                               <input
                                 type="time"
                                 name="journalEnd"
@@ -863,109 +1116,389 @@ export default function ProfilePage() {
                       </div>
                     </form>
                   ) : (
-                    <div className="space-y-3 sm:space-y-4">
+                    <div className="space-y-4 sm:space-y-5">
                       {/* Personal Work */}
                       {profile.timeCategories.personalWork && (
-                        <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl">
-                          <div className="flex items-center gap-3 mb-2">
-                            <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
-                            <div className="flex-1">
-                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Personal Work</p>
-                              {profile.timeCategories.personalWork.startTime && profile.timeCategories.personalWork.endTime ? (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.personalWork.startTime} - {profile.timeCategories.personalWork.endTime} • {profile.timeCategories.personalWork.totalHours?.toFixed(1)} hours
-                                </p>
-                              ) : (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.personalWork.totalHours?.toFixed(1)} hours
-                                </p>
-                              )}
+                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                          editingCategory === "personalWork" ? "border-indigo-400 dark:border-indigo-600" : "border-transparent"
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
+                              <div>
+                                <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Personal Work</p>
+                                {profile.timeCategories.personalWork.startTime && profile.timeCategories.personalWork.endTime ? (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.personalWork.startTime} - {profile.timeCategories.personalWork.endTime} • {profile.timeCategories.personalWork.totalHours?.toFixed(1)} hours
+                                  </p>
+                                ) : (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.personalWork.totalHours?.toFixed(1)} hours
+                                  </p>
+                                )}
+                              </div>
                             </div>
+                            {editingCategory === "personalWork" ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleSaveSingleCategory("personalWork")}
+                                  disabled={savingCategory === "personalWork"}
+                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <Save className="w-4 h-4" />
+                                  {savingCategory === "personalWork" ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                  onClick={handleCancelEditCategory}
+                                  disabled={savingCategory === "personalWork"}
+                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <X className="w-4 h-4" />
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleEditCategory("personalWork")}
+                                className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors text-sm flex items-center gap-2"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Edit
+                              </button>
+                            )}
                           </div>
+                          {editingCategory === "personalWork" && (
+                            <div className="mt-4 space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.personalWorkStart || profile.timeCategories.personalWork?.startTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, personalWorkStart: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.personalWorkEnd || profile.timeCategories.personalWork?.endTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, personalWorkEnd: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* Work Block */}
                       {profile.timeCategories.workBlock && (
-                        <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl">
-                          <div className="flex items-center gap-3 mb-2">
-                            <Briefcase className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                            <div className="flex-1">
-                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Work Block</p>
-                              {profile.timeCategories.workBlock.startTime && profile.timeCategories.workBlock.endTime ? (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.workBlock.startTime} - {profile.timeCategories.workBlock.endTime} • {profile.timeCategories.workBlock.totalHours?.toFixed(1)} hours
-                                </p>
-                              ) : (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.workBlock.totalHours?.toFixed(1)} hours
-                                </p>
-                              )}
+                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                          editingCategory === "workBlock" ? "border-purple-400 dark:border-purple-600" : "border-transparent"
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Briefcase className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                              <div>
+                                <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Work Block</p>
+                                {profile.timeCategories.workBlock.startTime && profile.timeCategories.workBlock.endTime ? (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.workBlock.startTime} - {profile.timeCategories.workBlock.endTime} • {profile.timeCategories.workBlock.totalHours?.toFixed(1)} hours
+                                  </p>
+                                ) : (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.workBlock.totalHours?.toFixed(1)} hours
+                                  </p>
+                                )}
+                              </div>
                             </div>
+                            {editingCategory === "workBlock" ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleSaveSingleCategory("workBlock")}
+                                  disabled={savingCategory === "workBlock"}
+                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <Save className="w-4 h-4" />
+                                  {savingCategory === "workBlock" ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                  onClick={handleCancelEditCategory}
+                                  disabled={savingCategory === "workBlock"}
+                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <X className="w-4 h-4" />
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleEditCategory("workBlock")}
+                                className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-sm flex items-center gap-2"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Edit
+                              </button>
+                            )}
                           </div>
+                          {editingCategory === "workBlock" && (
+                            <div className="mt-4 space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.workBlockStart || profile.timeCategories.workBlock?.startTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, workBlockStart: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.workBlockEnd || profile.timeCategories.workBlock?.endTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, workBlockEnd: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* Productive */}
                       {profile.timeCategories.productive && (
-                        <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl">
-                          <div className="flex items-center gap-3 mb-2">
-                            <Clock className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                            <div className="flex-1">
-                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Productive</p>
-                              {profile.timeCategories.productive.startTime && profile.timeCategories.productive.endTime ? (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.productive.startTime} - {profile.timeCategories.productive.endTime} • {profile.timeCategories.productive.totalHours?.toFixed(1)} hours
-                                </p>
-                              ) : (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.productive.totalHours?.toFixed(1)} hours
-                                </p>
-                              )}
+                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                          editingCategory === "productive" ? "border-green-400 dark:border-green-600" : "border-transparent"
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Clock className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                              <div>
+                                <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Productive</p>
+                                {profile.timeCategories.productive.startTime && profile.timeCategories.productive.endTime ? (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.productive.startTime} - {profile.timeCategories.productive.endTime} • {profile.timeCategories.productive.totalHours?.toFixed(1)} hours
+                                  </p>
+                                ) : (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.productive.totalHours?.toFixed(1)} hours
+                                  </p>
+                                )}
+                              </div>
                             </div>
+                            {editingCategory === "productive" ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleSaveSingleCategory("productive")}
+                                  disabled={savingCategory === "productive"}
+                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <Save className="w-4 h-4" />
+                                  {savingCategory === "productive" ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                  onClick={handleCancelEditCategory}
+                                  disabled={savingCategory === "productive"}
+                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <X className="w-4 h-4" />
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleEditCategory("productive")}
+                                className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg font-semibold hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-sm flex items-center gap-2"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Edit
+                              </button>
+                            )}
                           </div>
+                          {editingCategory === "productive" && (
+                            <div className="mt-4 space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.productiveStart || profile.timeCategories.productive?.startTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, productiveStart: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.productiveEnd || profile.timeCategories.productive?.endTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, productiveEnd: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* Family Time */}
                       {profile.timeCategories.familyTime && (
-                        <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 border-pink-200 dark:border-pink-800">
-                          <div className="flex items-center gap-3 mb-2">
-                            <Users className="w-5 h-5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
-                            <div className="flex-1">
-                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Family Time (Compulsory)</p>
-                              {profile.timeCategories.familyTime.startTime && profile.timeCategories.familyTime.endTime ? (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.familyTime.startTime} - {profile.timeCategories.familyTime.endTime} • {profile.timeCategories.familyTime.totalHours?.toFixed(1)} hours
-                                </p>
-                              ) : (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.familyTime.totalHours?.toFixed(1)} hours
-                                </p>
-                              )}
+                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                          editingCategory === "familyTime" ? "border-pink-400 dark:border-pink-600" : "border-pink-200 dark:border-pink-800"
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Users className="w-5 h-5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
+                              <div>
+                                <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Family Time (Compulsory)</p>
+                                {profile.timeCategories.familyTime.startTime && profile.timeCategories.familyTime.endTime ? (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.familyTime.startTime} - {profile.timeCategories.familyTime.endTime} • {profile.timeCategories.familyTime.totalHours?.toFixed(1)} hours
+                                  </p>
+                                ) : (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.familyTime.totalHours?.toFixed(1)} hours
+                                  </p>
+                                )}
+                              </div>
                             </div>
+                            {editingCategory === "familyTime" ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleSaveSingleCategory("familyTime")}
+                                  disabled={savingCategory === "familyTime"}
+                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <Save className="w-4 h-4" />
+                                  {savingCategory === "familyTime" ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                  onClick={handleCancelEditCategory}
+                                  disabled={savingCategory === "familyTime"}
+                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <X className="w-4 h-4" />
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleEditCategory("familyTime")}
+                                className="px-4 py-2 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg font-semibold hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors text-sm flex items-center gap-2"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Edit
+                              </button>
+                            )}
                           </div>
+                          {editingCategory === "familyTime" && (
+                            <div className="mt-4 space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.familyTimeStart || profile.timeCategories.familyTime?.startTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, familyTimeStart: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.familyTimeEnd || profile.timeCategories.familyTime?.endTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, familyTimeEnd: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* Journaling */}
                       {profile.timeCategories.journaling && (
-                        <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl">
-                          <div className="flex items-center gap-3">
-                            <BookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                            <div className="flex-1">
-                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Journaling</p>
-                              {profile.timeCategories.journaling.startTime && profile.timeCategories.journaling.endTime ? (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.journaling.startTime} - {profile.timeCategories.journaling.endTime} • {profile.timeCategories.journaling.totalHours?.toFixed(1)} hour{profile.timeCategories.journaling.totalHours !== 1 ? "s" : ""}
-                                </p>
-                              ) : (
-                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                  {profile.timeCategories.journaling.totalHours?.toFixed(1)} hour{profile.timeCategories.journaling.totalHours !== 1 ? "s" : ""}
-                                </p>
-                              )}
+                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                          editingCategory === "journaling" ? "border-amber-400 dark:border-amber-600" : "border-transparent"
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <BookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                              <div>
+                                <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Journaling</p>
+                                {profile.timeCategories.journaling.startTime && profile.timeCategories.journaling.endTime ? (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.journaling.startTime} - {profile.timeCategories.journaling.endTime} • {profile.timeCategories.journaling.totalHours?.toFixed(1)} hour{profile.timeCategories.journaling.totalHours !== 1 ? "s" : ""}
+                                  </p>
+                                ) : (
+                                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                    {profile.timeCategories.journaling.totalHours?.toFixed(1)} hour{profile.timeCategories.journaling.totalHours !== 1 ? "s" : ""}
+                                  </p>
+                                )}
+                              </div>
                             </div>
+                            {editingCategory === "journaling" ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleSaveSingleCategory("journaling")}
+                                  disabled={savingCategory === "journaling"}
+                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <Save className="w-4 h-4" />
+                                  {savingCategory === "journaling" ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                  onClick={handleCancelEditCategory}
+                                  disabled={savingCategory === "journaling"}
+                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                  <X className="w-4 h-4" />
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleEditCategory("journaling")}
+                                className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg font-semibold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors text-sm flex items-center gap-2"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Edit
+                              </button>
+                            )}
                           </div>
+                          {editingCategory === "journaling" && (
+                            <div className="mt-4 space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.journalStart || profile.timeCategories.journaling?.startTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, journalStart: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
+                                  <input
+                                    type="time"
+                                    value={timeAllocationForm.journalEnd || profile.timeCategories.journaling?.endTime || ""}
+                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, journalEnd: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

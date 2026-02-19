@@ -789,6 +789,101 @@ export async function updateTimeAllocation(formData: FormData) {
   }
 }
 
+export async function updateSingleTimeCategory(category: string, startTime: string, endTime: string) {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    // Validate category name
+    const validCategories = ["personalWork", "workBlock", "productive", "familyTime", "journaling"];
+    if (!validCategories.includes(category)) {
+      return { success: false, error: "Invalid category" };
+    }
+
+    if (!startTime || !endTime) {
+      return { success: false, error: "Start time and end time are required" };
+    }
+
+    // Map category name for TIME_LIMITS
+    const categoryKey = category === "journaling" ? "journal" : category;
+    const limits = TIME_LIMITS[categoryKey as keyof typeof TIME_LIMITS];
+    if (!limits) {
+      return { success: false, error: "Invalid category limits" };
+    }
+
+    // Validate duration
+    const duration = calculateDuration(startTime, endTime);
+    const currentHours = Math.floor(duration / 60);
+    const currentMins = duration % 60;
+    const minHours = Math.floor(limits.min / 60);
+    const minMins = limits.min % 60;
+    const maxHours = Math.floor(limits.max / 60);
+    const maxMins = limits.max % 60;
+    
+    if (duration < limits.min) {
+      return { success: false, error: `${category} duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min` };
+    } else if (duration > limits.max) {
+      return { success: false, error: `${category} duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min` };
+    }
+
+    // Get current user
+    const currentUser = await User.findById(user.userId).lean();
+    if (!currentUser) {
+      return { success: false, error: "User not found" };
+    }
+
+    // Build update object - only update the specific category
+    const timeCategoriesUpdate: any = {
+      ...(currentUser.timeCategories || {}),
+    };
+
+    const totalHours = duration / 60;
+    
+    // Update only the specific category
+    if (category === "journaling") {
+      timeCategoriesUpdate.journaling = {
+        startTime,
+        endTime,
+        totalHours,
+      };
+    } else {
+      timeCategoriesUpdate[category] = {
+        startTime,
+        endTime,
+        totalHours,
+        minAllocation: timeCategoriesUpdate[category]?.minAllocation || 50,
+      };
+    }
+
+    // Validate existing habits against new time range for this category
+    const validationResult = await validateExistingHabits(user.userId, timeCategoriesUpdate);
+
+    // Update user with new time category
+    const updatedUser = await User.findByIdAndUpdate(
+      user.userId,
+      {
+        $set: {
+          timeCategories: timeCategoriesUpdate,
+        },
+      },
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (!updatedUser) {
+      return { success: false, error: "Failed to update time allocation" };
+    }
+
+    return {
+      success: true,
+      profile: JSON.parse(JSON.stringify(updatedUser)),
+      warnings: validationResult.warnings,
+    };
+  } catch (error: any) {
+    console.error("[PROFILE ACTION] Error updating single time category:", error);
+    return { success: false, error: error.message || "Failed to update time allocation" };
+  }
+}
+
 export async function updateProfilePicture(formData: FormData) {
   try {
     const user = await requireAuth();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Target, Briefcase, Zap, Users, BookOpen, Edit2, Check, X, Clock } from "lucide-react";
+import { Target, Briefcase, Zap, Users, BookOpen, Edit2, Check, X, Clock, Plus, Minus } from "lucide-react";
 
 interface TimeBlockCardProps {
   id: string;
@@ -66,6 +66,40 @@ function formatDuration(minutes: number): string {
   return `${hours}h ${mins}m`;
 }
 
+// Helper function to adjust duration by keeping start time fixed and adjusting end time
+function adjustDuration(
+  startTime: string,
+  currentEndTime: string,
+  adjustmentMinutes: number,
+  minDuration: number,
+  maxDuration: number
+): string | null {
+  if (!startTime || !currentEndTime) return null;
+  
+  const currentDuration = calculateDuration(startTime, currentEndTime);
+  const newDuration = currentDuration + adjustmentMinutes;
+  
+  // Check if new duration is within limits
+  if (newDuration < minDuration || newDuration > maxDuration) {
+    return null; // Invalid adjustment
+  }
+  
+  const startMinutes = timeToMinutes(startTime);
+  let newEndMinutes = startMinutes + newDuration;
+  
+  // Handle wrapping around midnight - normalize to 0-1439 range
+  if (newEndMinutes >= 24 * 60) {
+    newEndMinutes = newEndMinutes % (24 * 60);
+  } else if (newEndMinutes < 0) {
+    newEndMinutes = (24 * 60) + (newEndMinutes % (24 * 60));
+  }
+  
+  // Convert back to time string
+  const hours = Math.floor(newEndMinutes / 60);
+  const mins = newEndMinutes % 60;
+  return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+}
+
 export default function TimeBlockCard({
   id,
   title,
@@ -102,184 +136,250 @@ export default function TimeBlockCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 transition-all duration-300 ${
+      className={`relative overflow-hidden rounded-2xl transition-all duration-300 ${
         isEditing
-          ? `${color.bg} ${color.bgDark} border-2 ${color.border} ${color.borderDark} shadow-lg`
-          : `bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 shadow-md hover:shadow-lg`
-      } ${isAnimating ? "scale-[1.02]" : ""} ${!isValid && isEditing ? "animate-shake" : ""}`}
+          ? `${color.bg} ${color.bgDark} border-2 ${color.border} ${color.borderDark} shadow-xl`
+          : `bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-700/50 shadow-lg hover:shadow-xl`
+      } ${isAnimating ? "scale-[1.01]" : ""} ${!isValid && isEditing ? "animate-shake" : ""}`}
     >
-      {/* Gradient overlay */}
-      <div className={`absolute inset-0 opacity-5 ${color.bg} ${color.bgDark} pointer-events-none`}></div>
+      {/* Premium gradient overlay */}
+      <div className={`absolute inset-0 opacity-[0.03] dark:opacity-[0.05] bg-gradient-to-br ${color.bg} ${color.bgDark} pointer-events-none`}></div>
+      
+      {/* Soft glow effect */}
+      <div className={`absolute -inset-0.5 bg-gradient-to-br ${color.border} ${color.borderDark} opacity-0 hover:opacity-20 dark:hover:opacity-10 rounded-2xl blur-xl transition-opacity duration-300 pointer-events-none`}></div>
 
-      <div className="relative z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-            <div className={`p-2 sm:p-2.5 rounded-lg sm:rounded-xl flex-shrink-0 ${color.bg} ${color.bgDark} ${color.icon} ${color.iconDark}`}>
-              <div className="w-4 h-4 sm:w-5 sm:h-5">{icon}</div>
+      <div className="relative z-10 p-4 sm:p-6 lg:p-8">
+        {/* Header Section */}
+        <div className="flex items-start justify-between mb-4 sm:mb-6">
+          <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+            <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0 ${color.bg} ${color.bgDark} ${color.icon} ${color.iconDark} shadow-md`}>
+              <div className="w-5 h-5 sm:w-6 sm:h-6">{icon}</div>
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className={`font-bold text-sm sm:text-base md:text-lg truncate ${color.text} ${color.textDark}`}>{title}</h3>
-              {!isEditing && startTime && endTime && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                  {formatTimeForDisplay(startTime)} — {formatTimeForDisplay(endTime)}
-                </p>
-              )}
+              <h3 className={`text-lg sm:text-xl lg:text-2xl font-bold mb-1 ${color.text} ${color.textDark}`}>{title}</h3>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                {formatDuration(minDuration)} - {formatDuration(maxDuration)} allowed
+              </p>
             </div>
           </div>
-          {!isEditing && onEdit && (
-            <button
-              onClick={onEdit}
-              className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-slate-700/50 transition-colors"
-            >
-              <Edit2 className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-            </button>
-          )}
-          {isEditing && (
-            <div className="flex gap-2">
-              {onSave && (
-                <button
-                  onClick={onSave}
-                  className="p-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors"
-                >
-                  <Check className="w-4 h-4" />
-                </button>
-              )}
-              {onCancel && (
-                <button
-                  onClick={onCancel}
-                  className="p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Time Display/Editor */}
+        {/* Time Display Section - Premium Design */}
         {isEditing ? (
-          <div className="space-y-3 sm:space-y-4">
-            {/* Time Inputs */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 sm:mb-2">
-                  From
+          <div className="space-y-4 sm:space-y-6">
+            {/* Time Inputs - Large and Clear */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="space-y-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Start Time
                 </label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => onStartTimeChange(e.target.value)}
-                  className={`w-full px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm md:text-base rounded-lg sm:rounded-xl border-2 transition-all ${
-                    isValid
-                      ? "border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
-                      : "border-red-300 dark:border-red-700 focus:border-red-400 dark:focus:border-red-500"
-                  } bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900`}
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                    <Clock className={`h-4 w-4 sm:h-5 sm:w-5 ${color.icon} ${color.iconDark} opacity-60`} />
+                  </div>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => onStartTimeChange(e.target.value)}
+                    className={`w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-3 sm:py-4 text-base sm:text-lg font-medium rounded-lg sm:rounded-xl border-2 transition-all ${
+                      isValid
+                        ? "border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
+                        : "border-red-300 dark:border-red-700 focus:border-red-400 dark:focus:border-red-500"
+                    } bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900 shadow-sm`}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 sm:mb-2">
-                  To
-                </label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => onEndTimeChange(e.target.value)}
-                  className={`w-full px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm md:text-base rounded-lg sm:rounded-xl border-2 transition-all ${
-                    isValid
-                      ? "border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
-                      : "border-red-300 dark:border-red-700 focus:border-red-400 dark:focus:border-red-500"
-                  } bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900`}
-                />
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    End Time
+                  </label>
+                  {startTime && endTime && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newEndTime = adjustDuration(startTime, endTime, -15, minDuration, maxDuration);
+                          if (newEndTime) {
+                            onEndTimeChange(newEndTime);
+                          }
+                        }}
+                        className={`p-1.5 rounded-lg ${color.bg} ${color.bgDark} ${color.icon} ${color.iconDark} hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95`}
+                        title="Decrease by 15 minutes"
+                      >
+                        <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newEndTime = adjustDuration(startTime, endTime, 15, minDuration, maxDuration);
+                          if (newEndTime) {
+                            onEndTimeChange(newEndTime);
+                          }
+                        }}
+                        className={`p-1.5 rounded-lg ${color.bg} ${color.bgDark} ${color.icon} ${color.iconDark} hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95`}
+                        title="Increase by 15 minutes"
+                      >
+                        <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                    <Clock className={`h-4 w-4 sm:h-5 sm:w-5 ${color.icon} ${color.iconDark} opacity-60`} />
+                  </div>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => onEndTimeChange(e.target.value)}
+                    className={`w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-3 sm:py-4 text-base sm:text-lg font-medium rounded-lg sm:rounded-xl border-2 transition-all ${
+                      isValid
+                        ? "border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
+                        : "border-red-300 dark:border-red-700 focus:border-red-400 dark:focus:border-red-500"
+                    } bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900 shadow-sm`}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Duration Display */}
+            {/* Current Time Display - Large and Prominent */}
             {startTime && endTime && (
-              <div className="space-y-1.5 sm:space-y-2">
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <span className="text-slate-600 dark:text-slate-400">Duration:</span>
-                  <span
-                    className={`font-semibold transition-colors ${
-                      isValidDuration
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {formatDuration(duration)}
-                  </span>
+              <div className="space-y-3 sm:space-y-4">
+                <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-lg sm:rounded-xl p-4 sm:p-5 border border-slate-200/50 dark:border-slate-700/50">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-400">Current Schedule</span>
+                    <span
+                      className={`text-xs sm:text-sm font-bold px-2 sm:px-3 py-1 rounded-lg ${
+                        isValidDuration
+                          ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                          : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                      }`}
+                    >
+                      {formatDuration(duration)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="flex-1 text-center p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">From</p>
+                      <p className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
+                        {formatTimeForDisplay(startTime)}
+                      </p>
+                    </div>
+                    <div className="text-slate-400 dark:text-slate-600 text-lg sm:text-xl font-bold">→</div>
+                    <div className="flex-1 text-center p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">To</p>
+                      <p className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
+                        {formatTimeForDisplay(endTime)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Progress Bar */}
-                <div className="relative h-2 sm:h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isOverLimit
-                        ? "bg-gradient-to-r from-red-400 to-red-600"
-                        : isValidDuration
-                        ? "bg-gradient-to-r from-green-400 to-green-600"
-                        : "bg-gradient-to-r from-yellow-400 to-yellow-600"
-                    }`}
-                    style={{ width: `${Math.min(progress, 100)}%` }}
-                  ></div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600 dark:text-slate-400 font-medium">Duration Progress</span>
+                    <span className={`font-bold ${
+                      isValidDuration ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                    }`}>
+                      {Math.round(progress)}%
+                    </span>
+                  </div>
+                  <div className="relative h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isOverLimit
+                          ? "bg-gradient-to-r from-red-400 to-red-600"
+                          : isValidDuration
+                          ? "bg-gradient-to-r from-green-400 to-green-600"
+                          : "bg-gradient-to-r from-yellow-400 to-yellow-600"
+                      } shadow-sm`}
+                      style={{ width: `${Math.min(progress, 100)}%` }}
+                    ></div>
+                  </div>
                 </div>
 
                 {/* Validation Message */}
                 {!isValidDuration && (
-                  <p className="text-xs text-red-600 dark:text-red-400 animate-fade-in">
-                    {duration < minDuration
-                      ? `Selected time must be at least ${formatDuration(minDuration)}.`
-                      : `Selected time must stay within ${formatDuration(minDuration)}–${formatDuration(maxDuration)}.`}
-                  </p>
+                  <div className="p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg sm:rounded-xl">
+                    <p className="text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium">
+                      {duration < minDuration
+                        ? `⚠️ Selected time must be at least ${formatDuration(minDuration)}.`
+                        : `⚠️ Selected time exceeds maximum of ${formatDuration(maxDuration)}.`}
+                    </p>
+                  </div>
                 )}
                 {isValidDuration && (
-                  <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                    <Check className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate">Within allowed range</span>
-                  </p>
+                  <div className="p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg sm:rounded-xl">
+                    <p className="text-xs sm:text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                      <span>Time allocation is within allowed range</span>
+                    </p>
+                  </div>
                 )}
               </div>
             )}
 
             {/* Error Message */}
             {error && (
-              <div className="mt-2 p-2 sm:p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-xs text-red-600 dark:text-red-400 break-words">{error}</p>
+              <div className="p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg sm:rounded-xl">
+                <p className="text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium break-words">{error}</p>
               </div>
             )}
           </div>
         ) : (
           /* Display Mode */
-          <div className="space-y-2 sm:space-y-3">
+          <div className="space-y-3 sm:space-y-4">
             {startTime && endTime ? (
               <>
-                <div className="flex items-center gap-2 text-xs sm:text-sm">
-                  <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-                  <span className="text-slate-700 dark:text-slate-300 truncate">
-                    {formatTimeForDisplay(startTime)} — {formatTimeForDisplay(endTime)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-xs sm:text-sm">
-                  <span className="text-slate-600 dark:text-slate-400">Duration:</span>
-                  <span className={`font-semibold ${color.text} ${color.textDark}`}>
-                    {formatDuration(duration)}
-                  </span>
+                <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-lg sm:rounded-xl p-4 sm:p-5 border border-slate-200/50 dark:border-slate-700/50">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-400">Schedule</span>
+                    <span className={`text-xs sm:text-sm font-bold px-2 sm:px-3 py-1 rounded-lg ${color.bg} ${color.bgDark} ${color.text} ${color.textDark}`}>
+                      {formatDuration(duration)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="flex-1 text-center p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">From</p>
+                      <p className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
+                        {formatTimeForDisplay(startTime)}
+                      </p>
+                    </div>
+                    <div className="text-slate-400 dark:text-slate-600 text-lg sm:text-xl font-bold">→</div>
+                    <div className="flex-1 text-center p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">To</p>
+                      <p className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
+                        {formatTimeForDisplay(endTime)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 {/* Progress Bar */}
-                <div className="relative h-2 sm:h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${color.bg} ${color.bgDark}`}
-                    style={{ width: `${Math.min(progress, 100)}%` }}
-                  ></div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600 dark:text-slate-400 font-medium">Duration</span>
+                    <span className={`font-bold ${color.text} ${color.textDark}`}>
+                      {formatDuration(duration)} / {formatDuration(maxDuration)}
+                    </span>
+                  </div>
+                  <div className="relative h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${color.bg} ${color.bgDark} shadow-sm`}
+                      style={{ width: `${Math.min(progress, 100)}%` }}
+                    ></div>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {formatDuration(duration)} of {formatDuration(maxDuration)} max
-                </p>
               </>
             ) : (
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 italic text-center py-3 sm:py-4">
-                No time allocated yet
-              </p>
+              <div className="text-center py-8">
+                <Clock className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                  No time allocated yet
+                </p>
+              </div>
             )}
           </div>
         )}

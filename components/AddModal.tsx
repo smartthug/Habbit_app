@@ -148,14 +148,8 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
     }
   }
 
-  const TIME_LIMITS = {
-    personal: { min: 75, max: 150 }, // 1h15min - 2h30min
-    work: { min: 120, max: 240 }, // 2h - 4h (using workBlock limits)
-    workBlock: { min: 120, max: 240 }, // 2h - 4h
-    productive: { min: 105, max: 210 }, // 1h45min - 3h30min
-    familyTime: { min: 60, max: 120 }, // 1h - 2h
-    journal: { min: 30, max: 60 }, // 30min - 1h
-  };
+  // TIME_LIMITS removed - duration validation is handled in profile setup
+  // Only range and overlap checks are needed here
 
   // Format time for display (HH:MM to 12-hour format)
   function formatTimeForDisplay(time: string): string {
@@ -176,7 +170,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
     journal: "journaling", // Map "journal" to "journaling" time allocation
   };
 
-  // Handle category change - auto-fill times
+  // Handle category change - auto-fill times with allocated range
   function handleCategoryChange(category: string) {
     setSelectedCategory(category);
     setTimeValidationError("");
@@ -191,14 +185,25 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
         console.log("[AddModal] Time slot found:", timeSlot);
         
         if (timeSlot.startTime && timeSlot.endTime) {
-          const newStart = timeSlot.startTime;
-          const newEnd = timeSlot.endTime;
-          console.log("[AddModal] Auto-filling times:", newStart, "-", newEnd);
-          setStartTime(newStart);
-          setEndTime(newEnd);
+          // Set the start time to the allocated start time
+          // User can edit it, but it must stay within the allocated range
+          setStartTime(timeSlot.startTime);
+          // Set end time to start time + 30 minutes (default duration)
+          // This gives a reasonable default that user can adjust
+          const defaultEndMinutes = timeToMinutes(timeSlot.startTime) + 30;
+          const defaultEnd = minutesToTime(defaultEndMinutes);
+          // Make sure default end doesn't exceed allocated end time
+          const allocatedEndMinutes = timeToMinutes(timeSlot.endTime);
+          if (defaultEndMinutes <= allocatedEndMinutes || (allocatedEndMinutes < timeToMinutes(timeSlot.startTime) && defaultEndMinutes <= 24 * 60)) {
+            setEndTime(defaultEnd);
+          } else {
+            // If default exceeds, set to allocated end time
+            setEndTime(timeSlot.endTime);
+          }
+          console.log("[AddModal] Auto-filling times:", timeSlot.startTime, "-", timeSlot.endTime);
           // Validate after setting times
           setTimeout(() => {
-            validateTimeSlot(newStart, newEnd, category);
+            validateTimeSlot(timeSlot.startTime, defaultEndMinutes <= allocatedEndMinutes ? defaultEnd : timeSlot.endTime, category);
           }, 100);
         } else {
           console.warn("[AddModal] Time slot missing startTime or endTime:", timeSlot);
@@ -215,6 +220,26 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
       setStartTime("");
       setEndTime("");
     }
+  }
+
+  // Helper to convert minutes to time string
+  function minutesToTime(minutes: number): string {
+    const hours = Math.floor(minutes / 60) % 24;
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+  }
+
+  // Get allocated time range for selected category
+  function getAllocatedTimeRange() {
+    if (!selectedCategory || !timeAllocation) return null;
+    const timeKey = categoryToTimeKey[selectedCategory];
+    if (timeKey && timeAllocation[timeKey]) {
+      return {
+        start: timeAllocation[timeKey].startTime,
+        end: timeAllocation[timeKey].endTime,
+      };
+    }
+    return null;
   }
 
   // Map habit category to profile time allocation category
@@ -248,6 +273,10 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
   }
 
   // Validate time slot
+  // Only validates:
+  // 1. Time is within the allocated range from profile setup
+  // 2. No overlaps with existing habits
+  // Duration min/max checks are NOT needed - already validated in profile setup
   function validateTimeSlot(checkStartTime?: string, checkEndTime?: string, checkCategory?: string) {
     const checkStart = checkStartTime ?? startTime;
     const checkEnd = checkEndTime ?? endTime;
@@ -258,8 +287,11 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
       return true;
     }
 
+    // Clear previous errors
+    setTimeValidationError("");
+
     // FIRST: Check if habit time slot is within category's allocated time range
-    // This is the most important validation - the time must be within the profile range
+    // This is CRITICAL - the time MUST be within the profile range
     if (timeAllocation) {
       const timeAllocationKey = mapCategoryToTimeAllocation(checkCat);
       if (timeAllocationKey && timeAllocation[timeAllocationKey]) {
@@ -267,7 +299,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
         if (timeCategory.startTime && timeCategory.endTime) {
           if (!isTimeRangeWithin(checkStart, checkEnd, timeCategory.startTime, timeCategory.endTime)) {
             setTimeValidationError(
-              `${getCategoryDisplayName(checkCat)} habit time (${formatTimeForDisplay(checkStart)} - ${formatTimeForDisplay(checkEnd)}) is outside the allocated ${getCategoryDisplayName(checkCat)} Time range (${formatTimeForDisplay(timeCategory.startTime)} - ${formatTimeForDisplay(timeCategory.endTime)}) in your profile. Please choose a time within this range.`
+              `❌ Time slot (${formatTimeForDisplay(checkStart)} - ${formatTimeForDisplay(checkEnd)}) is outside the allocated ${getCategoryDisplayName(checkCat)} Time range (${formatTimeForDisplay(timeCategory.startTime)} - ${formatTimeForDisplay(timeCategory.endTime)}). Please choose a time within this range.`
             );
             return false;
           }
@@ -275,86 +307,32 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
       }
     }
 
-    // SECOND: Check individual habit min/max duration limits
-    const duration = calculateDuration(checkStart, checkEnd);
-    const limits = TIME_LIMITS[checkCat as keyof typeof TIME_LIMITS];
-    
-    if (limits) {
-      if (duration < limits.min) {
-        const minHours = Math.floor(limits.min / 60);
-        const minMins = limits.min % 60;
-        setTimeValidationError(`Duration is less than minimum required time of ${minHours}h ${minMins}min`);
-        return false;
-      }
-
-      if (duration > limits.max) {
-        const maxHours = Math.floor(limits.max / 60);
-        const maxMins = limits.max % 60;
-        setTimeValidationError(`Duration exceeds maximum allowed time of ${maxHours}h ${maxMins}min`);
-        return false;
-      }
-    }
-
-    // Check for overlaps with existing habits in the same category
+    // SECOND: Check for overlaps with existing habits in the same category
+    // This is CRITICAL - no overlapping habits allowed
     const overlappingHabit = habits.find((habit: any) => {
       if (!habit.startTime || !habit.endTime || !habit.category) return false;
       // Check if same category or related categories
       const habitCategory = habit.category;
       const isSameCategory = habitCategory === checkCat || 
         (checkCat === "work" && habitCategory === "workBlock") ||
-        (checkCat === "workBlock" && habitCategory === "work");
+        (checkCat === "workBlock" && habitCategory === "work") ||
+        (checkCat === "personal" && habitCategory === "personal") ||
+        (checkCat === "productive" && habitCategory === "productive") ||
+        (checkCat === "familyTime" && habitCategory === "familyTime") ||
+        (checkCat === "journal" && habitCategory === "journal");
       if (!isSameCategory) return false;
+      // Check for any overlap
       return timeRangesOverlap(checkStart, checkEnd, habit.startTime, habit.endTime);
     });
 
     if (overlappingHabit) {
-      setTimeValidationError(`Time slot overlaps with existing habit: ${overlappingHabit.name}`);
+      setTimeValidationError(
+        `❌ Time slot overlaps with existing habit "${overlappingHabit.name}" (${formatTimeForDisplay(overlappingHabit.startTime)} - ${formatTimeForDisplay(overlappingHabit.endTime)}). Please choose a different time slot.`
+      );
       return false;
     }
 
-    // Check total category time against profile allocation
-    if (timeAllocation) {
-      const timeAllocationKey = mapCategoryToTimeAllocation(checkCat);
-      if (timeAllocationKey && timeAllocation[timeAllocationKey]) {
-        const timeCategory = timeAllocation[timeAllocationKey];
-        if (timeCategory.totalHours) {
-          // Get all existing habits in the same category
-          const existingHabitsInCategory = habits.filter((habit: any) => {
-            if (!habit.startTime || !habit.endTime || !habit.category) return false;
-            const habitCategory = habit.category;
-            return habitCategory === checkCat || 
-              (checkCat === "work" && habitCategory === "workBlock") ||
-              (checkCat === "workBlock" && habitCategory === "work");
-          });
-
-          // Calculate total duration of existing habits
-          let totalExistingMinutes = 0;
-          existingHabitsInCategory.forEach((habit: any) => {
-            if (habit.startTime && habit.endTime) {
-              totalExistingMinutes += calculateDuration(habit.startTime, habit.endTime);
-            }
-          });
-
-          // Add new habit duration
-          const totalMinutes = totalExistingMinutes + duration;
-          const allocatedMinutes = timeCategory.totalHours * 60;
-
-          if (totalMinutes > allocatedMinutes) {
-            const totalHours = Math.floor(totalMinutes / 60);
-            const totalMins = totalMinutes % 60;
-            const allocatedHours = Math.floor(allocatedMinutes / 60);
-            const allocatedMins = allocatedMinutes % 60;
-            
-            setTimeValidationError(
-              `Total ${getCategoryDisplayName(checkCat)} habit time (${totalHours}h ${totalMins}min) exceeds allocated ${getCategoryDisplayName(checkCat)} Time (${allocatedHours}h ${allocatedMins}min) in your profile. Please reduce the duration or adjust your profile allocation.`
-            );
-            return false;
-          }
-        }
-      }
-    }
-
-    setTimeValidationError("");
+    // All validations passed
     return true;
   }
 
@@ -406,6 +384,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
     setLoading(true);
 
     // Validate time slot if times are provided
+    // Only validates: time within allocated range and no overlaps
     if (startTime && endTime && selectedCategory) {
       if (!validateTimeSlot(startTime, endTime, selectedCategory)) {
         setError(timeValidationError);
@@ -469,22 +448,22 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in md:backdrop-blur-none">
-      <div className="relative w-full h-full md:h-auto md:max-w-2xl bg-slate-50 dark:bg-slate-900 rounded-3xl md:rounded-3xl shadow-premium-xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl lg:max-w-3xl bg-slate-50 dark:bg-slate-900 rounded-xl sm:rounded-2xl lg:rounded-3xl shadow-premium-xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200/50 dark:border-slate-800/50">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Add New</h2>
+        <div className="flex items-center justify-between p-4 sm:p-5 lg:p-6 border-b border-slate-200/50 dark:border-slate-800/50 flex-shrink-0">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900 dark:text-slate-100">Add New</h2>
           <button
             onClick={onClose}
-            className="tap-target p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="tap-target p-2 sm:p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95"
             aria-label="Close"
           >
-            <X className="w-6 h-6 text-slate-600 dark:text-slate-400" />
+            <X className="w-5 h-5 sm:w-6 sm:h-6 text-slate-600 dark:text-slate-400" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-200/50 dark:border-slate-800/50">
+        <div className="flex border-b border-slate-200/50 dark:border-slate-800/50 flex-shrink-0">
           {[
             { id: "idea" as const, label: "Idea", icon: Lightbulb },
             { id: "habit" as const, label: "Habit", icon: Target },
@@ -495,13 +474,13 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 font-semibold transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-3 sm:py-4 px-2 sm:px-4 text-sm sm:text-base font-semibold transition-all active:scale-95 ${
                   activeTab === tab.id
                     ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400"
                     : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             );
@@ -509,18 +488,18 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
           {error && (
-            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
+            <div className="mb-4 p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg sm:rounded-xl text-red-600 dark:text-red-400 text-xs sm:text-sm">
               {error}
             </div>
           )}
 
           {/* Idea Form */}
           {activeTab === "idea" && (
-            <form onSubmit={handleIdeaSubmit} className="space-y-4">
+            <form onSubmit={handleIdeaSubmit} className="space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Topic
                 </label>
                 <select
@@ -529,7 +508,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                   onChange={(e) => {
                     setSelectedHabitId(e.target.value);
                   }}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   autoFocus
                 >
                   <option value="">Select a topic (optional)</option>
@@ -544,34 +523,34 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Sub Topic
                 </label>
                 <input
                   type="text"
                   name="subTopic"
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   placeholder="Enter sub topic..."
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Description
                 </label>
                 <textarea
                   name="description"
                   rows={4}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100 resize-none"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100 resize-none"
                   placeholder="Add a description..."
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Priority
                 </label>
                 <select
                   name="priority"
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                 >
                   <option value="normal">Normal</option>
                   <option value="important">Important</option>
@@ -580,7 +559,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
               >
                 {loading ? "Creating..." : "Create Idea"}
               </button>
@@ -589,22 +568,22 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
 
           {/* Habit Form */}
           {activeTab === "habit" && (
-            <form onSubmit={handleHabitSubmit} className="space-y-4">
+            <form onSubmit={handleHabitSubmit} className="space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Routine Name *
                 </label>
                 <input
                   type="text"
                   name="name"
                   required
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   placeholder="e.g., Morning Exercise"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Category *
                 </label>
                 <select
@@ -613,7 +592,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                   required
                   value={selectedCategory}
                   onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                 >
                   <option value="">Select a category</option>
                   <option value="personal">Personal Work</option>
@@ -623,9 +602,9 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                   <option value="journal">Journal</option>
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                     From (Start Time) {selectedCategory && <span className="text-red-500">*</span>}
                   </label>
                   <input
@@ -634,11 +613,18 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                     value={startTime}
                     onChange={(e) => handleTimeChange("start", e.target.value)}
                     required={!!selectedCategory}
-                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    min={getAllocatedTimeRange()?.start}
+                    max={getAllocatedTimeRange()?.end}
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   />
+                  {selectedCategory && getAllocatedTimeRange() && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Min: {formatTimeForDisplay(getAllocatedTimeRange()!.start)}
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                     To (End Time) {selectedCategory && <span className="text-red-500">*</span>}
                   </label>
                   <input
@@ -647,17 +633,24 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                     value={endTime}
                     onChange={(e) => handleTimeChange("end", e.target.value)}
                     required={!!selectedCategory}
-                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    min={startTime || getAllocatedTimeRange()?.start}
+                    max={getAllocatedTimeRange()?.end}
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   />
+                  {selectedCategory && getAllocatedTimeRange() && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Max: {formatTimeForDisplay(getAllocatedTimeRange()!.end)}
+                    </p>
+                  )}
                 </div>
               </div>
               {startTime && endTime && (
-                <div className="text-sm text-slate-600 dark:text-slate-400">
+                <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                   Duration: {Math.floor(calculateDuration(startTime, endTime) / 60)}h {calculateDuration(startTime, endTime) % 60}min
                 </div>
               )}
               {timeValidationError && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-600 dark:text-red-400">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg sm:rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm text-red-600 dark:text-red-400">
                   {timeValidationError}
                 </div>
               )}
@@ -665,31 +658,62 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                 const timeKey = categoryToTimeKey[selectedCategory];
                 if (timeKey && timeAllocation[timeKey] && timeAllocation[timeKey].startTime && timeAllocation[timeKey].endTime) {
                   const timeSlot = timeAllocation[timeKey];
+                  // Get existing habits in this category
+                  const existingHabitsInCategory = habits.filter((habit: any) => {
+                    if (!habit.category) return false;
+                    const habitCategory = habit.category;
+                    return habitCategory === selectedCategory || 
+                      (selectedCategory === "work" && habitCategory === "workBlock") ||
+                      (selectedCategory === "workBlock" && habitCategory === "work");
+                  });
+                  
                   return (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 text-sm text-blue-800 dark:text-blue-300">
-                      <p className="font-semibold mb-1">ℹ️ Allowed Time Range:</p>
-                      <p>
-                        Your {getCategoryDisplayName(selectedCategory)} Time is set to{" "}
-                        <span className="font-semibold">
-                          {formatTimeForDisplay(timeSlot.startTime)} - {formatTimeForDisplay(timeSlot.endTime)}
-                        </span>
-                        . You can choose any time within this range.
-                      </p>
+                    <div className="space-y-2 sm:space-y-3">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg sm:rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm text-blue-800 dark:text-blue-300">
+                        <p className="font-semibold mb-1">ℹ️ Allocated Time Range:</p>
+                        <p className="break-words">
+                          Your {getCategoryDisplayName(selectedCategory)} Time is set to{" "}
+                          <span className="font-semibold">
+                            {formatTimeForDisplay(timeSlot.startTime)} - {formatTimeForDisplay(timeSlot.endTime)}
+                          </span>
+                          . You can choose any time within this range.
+                        </p>
+                      </div>
+                      {existingHabitsInCategory.length > 0 && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg sm:rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm">
+                          <p className="font-semibold mb-2 text-amber-800 dark:text-amber-300">📋 Existing Habits in {getCategoryDisplayName(selectedCategory)}:</p>
+                          <div className="space-y-1">
+                            {existingHabitsInCategory.map((habit: any) => (
+                              <div key={habit._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs text-amber-700 dark:text-amber-400">
+                                <span className="font-medium break-words">{habit.name}</span>
+                                {habit.startTime && habit.endTime && (
+                                  <span className="whitespace-nowrap">
+                                    {formatTimeForDisplay(habit.startTime)} - {formatTimeForDisplay(habit.endTime)}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-amber-600 dark:text-amber-500 mt-2 italic">
+                            ⚠️ Make sure your new habit time doesn't overlap with these existing habits.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 }
                 return null;
               })()}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Timeline (Duration of Habit) *
                 </label>
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setTimelineType("preset")}
-                      className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      className={`flex-1 px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all active:scale-95 ${
                         timelineType === "preset"
                           ? "bg-indigo-500 text-white"
                           : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
@@ -700,7 +724,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                     <button
                       type="button"
                       onClick={() => setTimelineType("custom")}
-                      className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      className={`flex-1 px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all active:scale-95 ${
                         timelineType === "custom"
                           ? "bg-indigo-500 text-white"
                           : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
@@ -713,7 +737,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                     <select
                       name="timeline"
                       required={timelineType === "preset"}
-                      className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                     >
                       <option value="">Select timeline</option>
                       <option value="30">1 Month</option>
@@ -722,7 +746,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                       <option value="365">1 Year</option>
                     </select>
                   ) : (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
                           Months
@@ -732,7 +756,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                           min="0"
                           value={customMonths || ""}
                           onChange={(e) => setCustomMonths(parseInt(e.target.value) || 0)}
-                          className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                          className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                           placeholder="0"
                         />
                       </div>
@@ -745,30 +769,30 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                           min="0"
                           value={customDays || ""}
                           onChange={(e) => setCustomDays(parseInt(e.target.value) || 0)}
-                          className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                          className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                           placeholder="0"
                         />
                       </div>
                     </div>
                   )}
                   {timelineType === "custom" && (customMonths > 0 || customDays > 0) && (
-                    <div className="text-sm text-slate-600 dark:text-slate-400">
+                    <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                       Total: {customMonths} Month{customMonths !== 1 ? "s" : ""} {customDays} Day{customDays !== 1 ? "s" : ""} ({customMonths * 30 + customDays} days)
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 sm:mt-2">
                   A day-wise schedule will be created for the selected timeline
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                     Priority
                   </label>
                   <select
                     name="priority"
-                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   >
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
@@ -776,12 +800,12 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                     Frequency
                   </label>
                   <select
                     name="frequency"
-                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -793,7 +817,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
               >
                 {loading ? "Creating..." : "Create Habit"}
               </button>
@@ -802,15 +826,15 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
 
           {/* Note Form */}
           {activeTab === "note" && (
-            <form onSubmit={handleNoteSubmit} className="space-y-4">
+            <form onSubmit={handleNoteSubmit} className="space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Daily Note
                 </label>
                 <textarea
                   name="note"
                   rows={6}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100 resize-none"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100 resize-none"
                   placeholder="Write your daily note..."
                   autoFocus
                 />
@@ -818,7 +842,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
               >
                 {loading ? "Saving..." : "Save Note"}
               </button>
