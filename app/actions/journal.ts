@@ -148,12 +148,12 @@ export async function getRequiredJournalCategories() {
 
     // If no Journal habit, return empty array (no restrictions until Journal habit is created)
     if (!journalHabit) {
-      return { success: true, requiredCategories: [], hasHabits: false, journalHabitConfigured: false };
+      return { success: true, requiredCategories: [] as string[], hasHabits: false, journalHabitConfigured: false };
     }
 
     // If only Journal habit exists (no other habits), return empty array
     if (habits.length === 1 && journalHabit) {
-      return { success: true, requiredCategories: [], hasHabits: false, journalHabitConfigured: true };
+      return { success: true, requiredCategories: [] as string[], hasHabits: false, journalHabitConfigured: true };
     }
 
     // Get unique journal categories required based on habit categories (excluding journal habit itself)
@@ -172,7 +172,7 @@ export async function getRequiredJournalCategories() {
     return { success: true, requiredCategories, hasHabits: true, journalHabitConfigured: true };
   } catch (error: any) {
     console.error("[JOURNAL ACTION] Error getting required categories:", error);
-    return { success: false, requiredCategories: [], hasHabits: false, journalHabitConfigured: false, error: error.message };
+    return { success: false, requiredCategories: [] as string[], hasHabits: false, journalHabitConfigured: false, error: error.message };
   }
 }
 
@@ -196,12 +196,12 @@ export async function getCompletedJournalCategories() {
       .select("category")
       .lean();
 
-    const completedCategories = journals.map((journal: any) => journal.category);
+    const completedCategories: string[] = journals.map((journal: any) => journal.category);
 
     return { success: true, completedCategories };
   } catch (error: any) {
     console.error("[JOURNAL ACTION] Error getting completed categories:", error);
-    return { success: false, completedCategories: [], error: error.message };
+    return { success: false, completedCategories: [] as string[], error: error.message };
   }
 }
 
@@ -249,7 +249,7 @@ export async function checkJournalRequirement() {
     }
 
     if (!requiredResult.journalHabitConfigured || requiredResult.requiredCategories.length === 0) {
-      return { success: true, isRequired: false, requiredCategories: [], completedCategories: [] };
+      return { success: true, isRequired: false, requiredCategories: [] as string[], completedCategories: [] as string[] };
     }
 
     // Get completed categories for today
