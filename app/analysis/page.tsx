@@ -37,7 +37,7 @@ export default function AnalysisPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
         <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
           <div className="flex items-center justify-center py-20">
             <div className="animate-pulse text-slate-400">Loading analysis...</div>
@@ -50,7 +50,7 @@ export default function AnalysisPage() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
         <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
           <div className="text-center py-20">
             <p className="text-slate-600 dark:text-slate-400">Failed to load analysis data</p>
@@ -94,7 +94,7 @@ export default function AnalysisPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
       <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
         {/* Header */}
         <div className="mb-4 sm:mb-6 md:mb-8">
@@ -363,7 +363,7 @@ export default function AnalysisPage() {
         </div>
 
         {/* Best Ideas */}
-        <div className="mb-4 sm:mb-6 pb-4">
+        <div className="mb-4 sm:mb-6 pb-8 sm:pb-6 md:pb-4">
           <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
             <div className="p-2 sm:p-2.5 bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 rounded-xl shadow-lg">
               <Lightbulb className="w-5 h-5 sm:w-6 sm:h-6 text-white flex-shrink-0" />

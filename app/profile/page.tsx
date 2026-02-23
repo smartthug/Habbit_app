@@ -470,7 +470,7 @@ export default function ProfilePage() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-indigo-50/50 dark:from-slate-950 dark:via-purple-950/20 dark:to-indigo-950/30 pb-24 sm:pb-20 safe-bottom">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-indigo-50/50 dark:from-slate-950 dark:via-purple-950/20 dark:to-indigo-950/30 pb-28 sm:pb-24 safe-bottom">
         <div className="max-w-md mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="animate-pulse">
             <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-xl w-32 mb-6"></div>
@@ -483,7 +483,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
         <div className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
           <div className="animate-pulse space-y-4">
             <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-xl w-32 mb-6"></div>

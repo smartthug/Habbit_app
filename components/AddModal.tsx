@@ -14,9 +14,10 @@ interface AddModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultTab?: "idea" | "habit" | "note";
+  onHabitCreated?: () => void;
 }
 
-export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddModalProps) {
+export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabitCreated }: AddModalProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"idea" | "habit" | "note">(defaultTab);
   const [loading, setLoading] = useState(false);
@@ -424,6 +425,10 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea" }: AddMo
       setCustomDays(0);
       onClose();
       router.refresh();
+      // Notify parent component to reload habits
+      if (onHabitCreated) {
+        onHabitCreated();
+      }
     } else {
       setError(result.error || "Failed to create habit");
       setLoading(false);

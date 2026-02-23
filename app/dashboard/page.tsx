@@ -1,10 +1,10 @@
 import { getCurrentUser } from "@/lib/auth";
-import { getTodayHabits, checkHabitRequirements } from "@/app/actions/habits";
+import { getTodayHabits, checkHabitRequirements, getUserStreak } from "@/app/actions/habits";
 import { getIdeas } from "@/app/actions/ideas";
 import { getTodayJournalCount } from "@/app/actions/journal";
 import { format } from "date-fns";
 import Link from "next/link";
-import { Plus, Target, Lightbulb, TrendingUp } from "lucide-react";
+import { Plus, Target, Lightbulb, TrendingUp, Flame } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import AddModal from "@/components/AddModal";
 import DynamicQuote from "@/components/DynamicQuote";
@@ -85,6 +85,10 @@ export default async function DashboardPage() {
   const journalCountResult = await getTodayJournalCount();
   const journalCount = journalCountResult.success ? journalCountResult.count : 0;
 
+  // Get user streak
+  const userStreakResult = await getUserStreak();
+  const currentStreak = userStreakResult.success ? userStreakResult.streak : 0;
+
   // Category display names
   const categoryNames: Record<string, string> = {
     personal: "Personal",
@@ -96,7 +100,7 @@ export default async function DashboardPage() {
   };
 
   const coreCategoryNames: Record<string, string> = {
-    personal: "Personal",
+    personal: "Personal Work",
     workBlock: "Work Block",
     productive: "Productive",
     familyTime: "Family Time",
@@ -111,7 +115,7 @@ export default async function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
       <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
         <div className="mb-8 md:mb-10 lg:mb-12 animate-fade-in">
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 tracking-tight leading-tight">
@@ -123,37 +127,32 @@ export default async function DashboardPage() {
           <DynamicQuote timeAllocation={user.timeCategories} />
         </div>
 
-        {/* Habit Requirements Status */}
-        {habitRequirements && !habitRequirements.isComplete && (
+        {/* Habit Requirements Status - Show warning if any category is missing */}
+        {habitRequirements && habitRequirements.missingCategories && habitRequirements.missingCategories.length > 0 && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-6 mb-6 shadow-premium-lg">
             <h3 className="text-lg font-bold text-amber-900 dark:text-amber-100 mb-4 flex items-center gap-2">
               <Target className="w-5 h-5" />
               Habit Requirements
             </h3>
             <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-amber-800 dark:text-amber-200">Minimum 5 habits:</span>
-                <span className={`font-semibold ${habitRequirements.hasMinimumHabits ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
-                  {habitRequirements.totalHabits}/{habitRequirements.requiredHabits}
-                </span>
-              </div>
-              {habitRequirements.missingCategories && habitRequirements.missingCategories.length > 0 && (
-                <div>
-                  <span className="text-amber-800 dark:text-amber-200">Missing categories:</span>
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    {habitRequirements.missingCategories.map((cat: string) => (
-                      <span key={cat} className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-800 dark:text-amber-200 font-medium text-xs">
-                        {coreCategoryNames[cat] || cat}
+              {/* Missing categories warning */}
+              <div>
+                <p className="text-amber-800 dark:text-amber-200 font-semibold mb-3">
+                  ⚠️ Missing Required Categories:
+                </p>
+                <div className="space-y-2">
+                  {habitRequirements.missingCategories.map((cat: string) => (
+                    <div key={cat} className="flex items-center gap-2 p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <span className="text-amber-800 dark:text-amber-200 font-medium">
+                        You missed the habit in <span className="font-bold">{coreCategoryNames[cat] || cat}</span>.
                       </span>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-              {!habitRequirements.journalExists && (
-                <div className="text-amber-800 dark:text-amber-200">
-                  <span className="font-semibold">⚠️ Journal habit is required</span>
-                </div>
-              )}
+                <p className="text-amber-800 dark:text-amber-200 text-xs mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
+                  You must have at least one habit in each of the 5 required categories: Personal Work, Work Block, Productive, Family Time, and Journal.
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -292,25 +291,30 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        {/* Streak Indicator - Premium */}
-        {totalCount > 0 && (
-          <div className="relative overflow-hidden rounded-3xl p-6 md:p-8 lg:p-10 text-white shadow-premium-xl animate-scale-in mb-6">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-500 dark:via-purple-500 dark:to-pink-500"></div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
-            <div className="absolute inset-0 opacity-20" style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-            }}></div>
-            <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6 z-10">
-              <div>
-                <p className="text-sm md:text-base opacity-100 mb-2 font-bold tracking-wide text-white drop-shadow-lg">Current Streak</p>
-                <p className="text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold mb-2 drop-shadow-2xl">🔥 {completionRate > 0 ? "1" : "0"}</p>
-                <p className="text-base md:text-lg font-bold mb-1 text-white drop-shadow-lg">days</p>
-                <p className="text-xs md:text-sm opacity-100 mt-2 font-semibold text-white drop-shadow">Keep it going! 💪</p>
+        {/* Current Streak - At the bottom */}
+        <div className="relative overflow-hidden rounded-3xl p-6 md:p-8 lg:p-10 text-white shadow-premium-xl animate-scale-in">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-500 dark:via-purple-500 dark:to-pink-500"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
+          <div className="absolute inset-0 opacity-20" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+          }}></div>
+          <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6 z-10">
+            <div>
+              <p className="text-sm md:text-base opacity-100 mb-2 font-bold tracking-wide text-white drop-shadow-lg">Current Streak</p>
+              <div className="flex items-baseline gap-2 mb-2">
+                <Flame className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 text-orange-300 drop-shadow-lg" />
+                <p className="text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold drop-shadow-2xl">{currentStreak}</p>
               </div>
-              <TrendingUp className="w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 opacity-100 text-white drop-shadow-lg animate-pulse flex-shrink-0" />
+              <p className="text-base md:text-lg font-bold mb-1 text-white drop-shadow-lg">
+                {currentStreak === 1 ? "day" : "days"} in a row
+              </p>
+              <p className="text-xs md:text-sm opacity-100 mt-2 font-semibold text-white drop-shadow">
+                {currentStreak > 0 ? "Keep it going! 💪" : "Start your streak today! 🚀"}
+              </p>
             </div>
+            <TrendingUp className="w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 opacity-100 text-white drop-shadow-lg animate-pulse flex-shrink-0" />
           </div>
-        )}
+        </div>
       </div>
 
       <Navigation />

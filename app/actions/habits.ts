@@ -276,17 +276,18 @@ export async function getHabits() {
 
     const habits = await Habit.find({ userId: user.userId }).sort({ createdAt: -1 }).lean();
 
-    // Update completion percentages for all habits with timelines
-    for (const habit of habits) {
-      if (habit.timeline) {
-        await updateHabitCompletionPercentage(habit._id.toString(), user.userId);
-      }
-    }
+    // Update completion percentages in parallel (non-blocking)
+    const updatePromises = habits
+      .filter(habit => habit.timeline)
+      .map(habit => updateHabitCompletionPercentage(habit._id.toString(), user.userId));
+    
+    // Don't wait for updates - return habits immediately
+    // Updates will happen in background
+    Promise.all(updatePromises).catch(err => {
+      console.error("Error updating completion percentages:", err);
+    });
 
-    // Fetch updated habits
-    const updatedHabits = await Habit.find({ userId: user.userId }).sort({ createdAt: -1 });
-
-    return { success: true, habits: JSON.parse(JSON.stringify(updatedHabits)) };
+    return { success: true, habits: JSON.parse(JSON.stringify(habits)) };
   } catch (error: any) {
     return { error: error.message || "Failed to fetch habits" };
   }
@@ -301,7 +302,10 @@ function mapToCoreCategory(category: string): CoreCategory | null {
   const mapping: { [key: string]: CoreCategory } = {
     personal: "personal",
     work: "workBlock", // work maps to workBlock
+    workBlock: "workBlock",
+    productive: "productive",
     family: "familyTime", // family maps to familyTime
+    familyTime: "familyTime",
     business: "workBlock", // business maps to workBlock
     journal: "journal",
     custom: "personal", // custom defaults to personal
@@ -563,5 +567,76 @@ export async function getHabitStreak(habitId: string) {
     return { success: true, streak };
   } catch (error: any) {
     return { error: error.message || "Failed to calculate streak" };
+  }
+}
+
+export async function getUserStreak() {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Get all completed habit logs for the user
+    const logs = await HabitLog.find({
+      userId: user.userId,
+      status: "done",
+    })
+      .sort({ date: -1 })
+      .limit(365)
+      .lean();
+
+    if (logs.length === 0) return { success: true, streak: 0 };
+
+    // Get unique dates where at least one habit was completed
+    const completedDates = new Set<string>();
+    logs.forEach((log: any) => {
+      const logDate = new Date(log.date);
+      logDate.setHours(0, 0, 0, 0);
+      completedDates.add(logDate.toISOString());
+    });
+
+    // Convert to sorted array of dates
+    const sortedDates = Array.from(completedDates)
+      .map((dateStr) => new Date(dateStr))
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    let streak = 0;
+    let currentDate = new Date(today);
+
+    // Check if today has at least one completed habit
+    const todayStr = currentDate.toISOString();
+    const hasToday = completedDates.has(todayStr);
+
+    if (!hasToday) {
+      // Check yesterday
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString();
+      if (!completedDates.has(yesterdayStr)) {
+        return { success: true, streak: 0 };
+      }
+      // Start counting from yesterday
+      currentDate = new Date(yesterday);
+    }
+
+    // Count consecutive days
+    for (const date of sortedDates) {
+      const dateStr = date.toISOString();
+      const currentStr = currentDate.toISOString();
+
+      if (dateStr === currentStr) {
+        streak++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else if (date.getTime() < currentDate.getTime()) {
+        break;
+      }
+    }
+
+    return { success: true, streak };
+  } catch (error: any) {
+    console.error("Error calculating user streak:", error);
+    return { success: false, error: error.message || "Failed to calculate streak", streak: 0 };
   }
 }

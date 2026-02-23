@@ -92,8 +92,10 @@ export async function getAnalysisData() {
       ...completedHabits.map((h: any) => ({ ...h, type: "habit" })),
     ];
 
+    // Pending tasks include all incomplete habits from today (not done)
+    // This includes habits with status "pending", "skipped", or null (not logged)
     const pendingTasks = [
-      ...todayHabits.filter((h: any) => h.status === "pending").map((h: any) => ({ ...h, type: "habit" })),
+      ...todayHabits.map((h: any) => ({ ...h, type: "habit" })),
     ];
 
     const futureTasks = [
@@ -253,6 +255,118 @@ export async function getAnalysisData() {
     return {
       success: false,
       error: error.message || "Failed to fetch analysis data",
+    };
+  }
+}
+
+export async function addIncompleteTasksToPendingHabits() {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Get all habits
+    const habits = await Habit.find({ userId: user.userId }).lean();
+    
+    // Get today's habit logs
+    const todayLogs = await HabitLog.find({
+      userId: user.userId,
+      date: today,
+    }).lean();
+
+    const logMap = new Map(todayLogs.map((log: any) => [log.habitId.toString(), log.status]));
+
+    // Get incomplete habits (not done) - these are already pending, so we don't need to create new ones
+    // But we'll mark them as pending if they're skipped
+
+    // Get today's calendar events (these are incomplete tasks that should become habits)
+    const todayEvents = await Calendar.find({
+      userId: user.userId,
+      date: {
+        $gte: startOfDay(today),
+        $lte: endOfDay(today),
+      },
+    }).lean();
+
+    // Create habits from incomplete calendar events
+    const createdHabits = [];
+    for (const event of todayEvents) {
+      // Check if a habit with this name already exists
+      const existingHabit = await Habit.findOne({
+        userId: user.userId,
+        name: event.title,
+      });
+
+      if (!existingHabit) {
+        // Parse time if available (format: "HH:MM" or "HH:MM AM/PM")
+        let startTime: string | undefined;
+        let endTime: string | undefined;
+        
+        if (event.time) {
+          // Try to parse time - assume it's in HH:MM format or convert from 12-hour
+          const timeStr = event.time.trim();
+          if (timeStr.includes(":")) {
+            const [hours, minutes] = timeStr.split(":");
+            const hourNum = parseInt(hours);
+            if (!isNaN(hourNum) && hourNum >= 0 && hourNum < 24) {
+              startTime = `${hours.padStart(2, "0")}:${minutes.substring(0, 2).padStart(2, "0")}`;
+            }
+          }
+        }
+
+        // Create a new habit from the calendar event
+        const newHabit = await Habit.create({
+          userId: new mongoose.Types.ObjectId(user.userId),
+          name: event.title,
+          category: event.type === "meeting" ? "workBlock" : event.type === "birthday" ? "familyTime" : "custom",
+          frequency: "daily",
+          priority: "medium",
+          startTime: startTime,
+          endTime: endTime,
+        });
+        createdHabits.push(newHabit);
+      }
+    }
+
+    // Also mark incomplete habits (skipped) as pending by ensuring they have a log entry
+    const incompleteHabits = habits.filter((habit: any) => {
+      const status = logMap.get(habit._id.toString());
+      return status === "skipped" || status === null || status === undefined;
+    });
+
+    for (const habit of incompleteHabits) {
+      const existingLog = todayLogs.find((log: any) => log.habitId.toString() === habit._id.toString());
+      if (!existingLog || existingLog.status === "skipped") {
+        // Ensure there's a log entry marked as skipped (pending)
+        await HabitLog.findOneAndUpdate(
+          {
+            habitId: habit._id,
+            userId: user.userId,
+            date: today,
+          },
+          {
+            habitId: habit._id,
+            userId: user.userId,
+            date: today,
+            status: "skipped",
+          },
+          { upsert: true, new: true }
+        );
+      }
+    }
+
+    return {
+      success: true,
+      message: `Added ${createdHabits.length} incomplete task(s) as pending habits`,
+      createdHabits: JSON.parse(JSON.stringify(createdHabits)),
+    };
+  } catch (error: any) {
+    console.error("Error adding incomplete tasks to pending habits:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to add incomplete tasks to pending habits",
     };
   }
 }
