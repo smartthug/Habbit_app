@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCalendarEvents, deleteCalendarEvent } from "@/app/actions/calendar";
 import { getTodayJournalCount } from "@/app/actions/journal";
+import { getHabitsForDate } from "@/app/actions/habits";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalendarIcon, Clock, MapPin, Bell, Repeat, X } from "lucide-react";
 import Navigation from "@/components/Navigation";
@@ -21,6 +22,7 @@ export default function CalendarPage() {
   const [showDateEventsModal, setShowDateEventsModal] = useState(false);
   const [dateEvents, setDateEvents] = useState<any[]>([]);
   const [modalDate, setModalDate] = useState<Date | null>(null);
+  const [habits, setHabits] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     loadEvents();
@@ -37,6 +39,22 @@ export default function CalendarPage() {
     if (result.success) {
       setEvents(result.events);
     }
+    
+    // Load habits for all days in the month
+    const habitsMap: Record<string, any[]> = {};
+    const daysInMonth = eachDayOfInterval({ start, end });
+    
+    await Promise.all(
+      daysInMonth.map(async (day) => {
+        const dateStr = day.toISOString().split('T')[0];
+        const habitsResult = await getHabitsForDate(dateStr);
+        if (habitsResult.success) {
+          habitsMap[dateStr] = habitsResult.habits || [];
+        }
+      })
+    );
+    
+    setHabits(habitsMap);
     setLoading(false);
   }
 
@@ -71,10 +89,35 @@ export default function CalendarPage() {
   }
 
   function getEventsForDate(date: Date) {
-    return events.filter((event) => {
+    const calendarEvents = events.filter((event) => {
       const eventDate = new Date(event.date);
       return isSameDay(eventDate, date);
     });
+    
+    // Get habits for this date
+    const dateStr = date.toISOString().split('T')[0];
+    const habitsForDate = habits[dateStr] || [];
+    
+    // Convert habits to calendar event format and combine with other events
+    const habitEvents = habitsForDate.map((habit: any) => ({
+      _id: `habit-${habit._id}-${dateStr}`,
+      title: habit.name,
+      type: "habit",
+      date: date,
+      time: habit.startTime || undefined,
+      description: `${habit.name} - ${habit.category}`,
+      habitId: habit._id,
+    }));
+    
+    // Combine and sort by time
+    const allEvents = [...calendarEvents, ...habitEvents].sort((a, b) => {
+      if (!a.time && !b.time) return 0;
+      if (!a.time) return 1;
+      if (!b.time) return -1;
+      return a.time.localeCompare(b.time);
+    });
+    
+    return allEvents;
   }
 
   function getEventTypeColor(type: string) {
@@ -85,6 +128,8 @@ export default function CalendarPage() {
         return "bg-purple-500";
       case "birthday":
         return "bg-pink-500";
+      case "habit":
+        return "bg-indigo-500";
       default:
         return "bg-slate-500";
     }
@@ -98,6 +143,8 @@ export default function CalendarPage() {
         return "bg-purple-500";
       case "birthday":
         return "bg-pink-500";
+      case "habit":
+        return "bg-indigo-500";
       default:
         return "bg-slate-500";
     }
@@ -111,6 +158,8 @@ export default function CalendarPage() {
         return "Event";
       case "birthday":
         return "Birthday";
+      case "habit":
+        return "Habit";
       default:
         return "Event";
     }
@@ -120,6 +169,19 @@ export default function CalendarPage() {
     const dayEvents = getEventsForDate(date);
     const types = new Set(dayEvents.map(event => event.type));
     return Array.from(types);
+  }
+  
+  function getEventTypeIcon(type: string) {
+    switch (type) {
+      case "habit":
+        return "🎯";
+      case "meeting":
+        return "📅";
+      case "birthday":
+        return "🎂";
+      default:
+        return "📌";
+    }
   }
 
   function navigateMonth(direction: "prev" | "next") {
@@ -308,25 +370,30 @@ export default function CalendarPage() {
 
                       {/* Desktop/Laptop: Show event names */}
                       <div className="hidden md:block space-y-0.5 mt-1 flex-1 overflow-hidden">
-                        {dayEvents.slice(0, 2).map((event) => (
+                        {dayEvents.slice(0, 3).map((event) => (
                           <button
                             key={event._id}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleEventClick(event);
+                              if (!event.habitId) {
+                                handleEventClick(event);
+                              } else {
+                                handleDateClick(day);
+                              }
                             }}
                             className={`w-full text-left px-1.5 py-0.5 rounded text-[10px] lg:text-xs font-medium text-white ${getEventTypeColor(
                               event.type
-                            )} truncate hover:opacity-90 transition-opacity`}
+                            )} truncate hover:opacity-90 transition-opacity flex items-center gap-1`}
                             title={`${event.time ? event.time + " - " : ""}${event.title}`}
                           >
+                            <span className="text-[8px]">{getEventTypeIcon(event.type)}</span>
                             {event.time ? `${event.time.substring(0, 5)} ` : ""}
                             {event.title}
                           </button>
                         ))}
-                        {dayEvents.length > 2 && (
+                        {dayEvents.length > 3 && (
                           <div className="text-[10px] lg:text-xs text-slate-500 dark:text-slate-400 px-1.5 font-medium">
-                            +{dayEvents.length - 2} more
+                            +{dayEvents.length - 3} more
                           </div>
                         )}
                       </div>
@@ -471,72 +538,75 @@ export default function CalendarPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {/* Group events by type */}
-                  {["meeting", "event", "birthday"].map((type) => {
-                    const typeEvents = dateEvents.filter((e) => e.type === type);
-                    if (typeEvents.length === 0) return null;
-
-                    return (
-                      <div key={type} className="space-y-2">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className={`w-3 h-3 rounded-full ${getEventTypeDotColor(type)}`} />
-                          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            {getEventTypeLabel(type)}
-                            {typeEvents.length > 1 && ` (${typeEvents.length})`}
-                          </h3>
-                        </div>
-                        {typeEvents.map((event) => (
-                          <div
-                            key={event._id}
-                            onClick={() => {
-                              setShowDateEventsModal(false);
-                              setSelectedEvent(event);
-                              setSelectedDate(undefined);
-                              setShowEventModal(true);
-                            }}
-                            className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
-                                  {event.title}
-                                </h4>
-                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                                  {event.time && (
-                                    <div className="flex items-center gap-1">
-                                      <Clock className="w-3 h-3" />
-                                      <span>{event.time}</span>
-                                    </div>
-                                  )}
-                                  {event.location && (
-                                    <div className="flex items-center gap-1">
-                                      <MapPin className="w-3 h-3" />
-                                      <span className="truncate">{event.location}</span>
-                                    </div>
-                                  )}
-                                </div>
-                                {event.description && (
-                                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
-                                    {event.description}
-                                  </p>
-                                )}
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(event._id);
-                                }}
-                                className="tap-target p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors flex-shrink-0"
-                                aria-label="Delete event"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                  {/* Show all events sorted by time */}
+                  <div className="space-y-3">
+                    {dateEvents.map((event) => (
+                      <div
+                        key={event._id}
+                        onClick={() => {
+                          if (!event.habitId) {
+                            setShowDateEventsModal(false);
+                            setSelectedEvent(event);
+                            setSelectedDate(undefined);
+                            setShowEventModal(true);
+                          }
+                        }}
+                        className={`p-3 rounded-lg border cursor-pointer hover:opacity-90 transition-all ${
+                          event.type === "habit"
+                            ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800"
+                            : "bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">{getEventTypeIcon(event.type)}</span>
+                              <span className={`px-2 py-0.5 rounded-md text-xs font-semibold text-white ${getEventTypeColor(event.type)}`}>
+                                {getEventTypeLabel(event.type)}
+                              </span>
+                              {event.time && (
+                                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                                  {event.time}
+                                </span>
+                              )}
                             </div>
+                            <h4 className={`text-sm font-semibold mb-1 ${
+                              event.type === "habit"
+                                ? "text-indigo-900 dark:text-indigo-100"
+                                : "text-slate-900 dark:text-slate-100"
+                            }`}>
+                              {event.title}
+                            </h4>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                              {event.location && (
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />
+                                  <span className="truncate">{event.location}</span>
+                                </div>
+                              )}
+                            </div>
+                            {event.description && (
+                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
+                                {event.description}
+                              </p>
+                            )}
                           </div>
-                        ))}
+                          {!event.habitId && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(event._id);
+                              }}
+                              className="tap-target p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors flex-shrink-0"
+                              aria-label="Delete event"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
                   
                   {/* Add Event Button */}
                   <button

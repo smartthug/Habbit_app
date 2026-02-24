@@ -7,7 +7,9 @@ import Habit from "@/models/Habit";
 import HabitLog from "@/models/HabitLog";
 import Idea from "@/models/Idea";
 import User from "@/models/User";
+import Calendar from "@/models/Calendar";
 import mongoose from "mongoose";
+import { addWeeks, addMonths, addYears } from "date-fns";
 
 const createHabitSchema = z.object({
   name: z.string().min(1, "Habit name is required"),
@@ -16,6 +18,9 @@ const createHabitSchema = z.object({
   endTime: z.string().optional(),
   timeline: z.number().int().positive().optional(),
   frequency: z.enum(["daily", "weekly", "monthly", "yearly", "custom"]),
+  dayOfWeek: z.number().int().min(0).max(6).optional(),
+  dayOfMonth: z.number().int().min(1).max(31).optional(),
+  month: z.number().int().min(0).max(11).optional(),
   priority: z.enum(["low", "medium", "high"]),
   reminderTime: z.string().optional(),
   ideaGenerating: z.boolean().optional(),
@@ -106,6 +111,82 @@ function timeRangesOverlap(
   return !(e1 <= s2 || e2 <= s1);
 }
 
+// Helper function to generate recurring dates based on frequency within timeline
+function generateRecurringDates(
+  startDate: Date,
+  frequency: "daily" | "weekly" | "monthly" | "yearly",
+  timelineDays: number,
+  dayOfWeek?: number,
+  dayOfMonth?: number,
+  month?: number
+): Date[] {
+  const dates: Date[] = [];
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + timelineDays);
+  
+  let currentDate = new Date(startDate);
+  currentDate.setHours(0, 0, 0, 0);
+  
+  if (frequency === "daily") {
+    // Daily: add every day
+    while (currentDate < endDate) {
+      dates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+  } else if (frequency === "weekly" && dayOfWeek !== undefined) {
+    // Weekly: find next occurrence of the specified day of week
+    while (currentDate.getDay() !== dayOfWeek && currentDate < endDate) {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    while (currentDate < endDate) {
+      dates.push(new Date(currentDate));
+      currentDate = addWeeks(currentDate, 1);
+    }
+  } else if (frequency === "monthly" && dayOfMonth !== undefined) {
+    // Monthly: find next occurrence of the specified day of month
+    while (currentDate.getDate() !== dayOfMonth && currentDate < endDate) {
+      const nextMonth = new Date(currentDate);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      nextMonth.setDate(dayOfMonth);
+      if (nextMonth < endDate) {
+        currentDate = nextMonth;
+      } else {
+        break;
+      }
+    }
+    while (currentDate < endDate) {
+      dates.push(new Date(currentDate));
+      currentDate = addMonths(currentDate, 1);
+      // Handle months with fewer days (e.g., Feb 31 -> Feb 28/29)
+      const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+      currentDate.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+    }
+  } else if (frequency === "yearly" && month !== undefined && dayOfMonth !== undefined) {
+    // Yearly: find next occurrence of the specified month and day
+    while ((currentDate.getMonth() !== month || currentDate.getDate() !== dayOfMonth) && currentDate < endDate) {
+      const nextYear = new Date(currentDate);
+      nextYear.setFullYear(nextYear.getFullYear() + 1);
+      nextYear.setMonth(month);
+      const lastDayOfMonth = new Date(nextYear.getFullYear(), nextYear.getMonth() + 1, 0).getDate();
+      nextYear.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+      if (nextYear < endDate) {
+        currentDate = nextYear;
+      } else {
+        break;
+      }
+    }
+    while (currentDate < endDate) {
+      dates.push(new Date(currentDate));
+      currentDate = addYears(currentDate, 1);
+      currentDate.setMonth(month);
+      const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+      currentDate.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+    }
+  }
+  
+  return dates;
+}
+
 // Check if a time range is completely within another time range
 function isTimeRangeWithin(
   innerStart: string,
@@ -163,6 +244,9 @@ export async function createHabit(formData: FormData) {
       endTime: (formData.get("endTime") as string) || undefined,
       timeline: formData.get("timeline") ? parseInt(formData.get("timeline") as string) : undefined,
       frequency: (formData.get("frequency") as string) || "daily",
+      dayOfWeek: formData.get("dayOfWeek") ? parseInt(formData.get("dayOfWeek") as string) : undefined,
+      dayOfMonth: formData.get("dayOfMonth") ? parseInt(formData.get("dayOfMonth") as string) : undefined,
+      month: formData.get("month") ? parseInt(formData.get("month") as string) : undefined,
       priority: (formData.get("priority") as string) || "medium",
       reminderTime: (formData.get("reminderTime") as string) || undefined,
       ideaGenerating: formData.get("ideaGenerating") === "true",
@@ -230,7 +314,18 @@ export async function createHabit(formData: FormData) {
 
     const habit = await Habit.create({
       userId: new mongoose.Types.ObjectId(user.userId),
-      ...validatedData,
+      name: validatedData.name,
+      category: validatedData.category,
+      startTime: validatedData.startTime,
+      endTime: validatedData.endTime,
+      timeline: validatedData.timeline,
+      frequency: validatedData.frequency,
+      dayOfWeek: validatedData.dayOfWeek,
+      dayOfMonth: validatedData.dayOfMonth,
+      month: validatedData.month,
+      priority: validatedData.priority,
+      reminderTime: validatedData.reminderTime,
+      ideaGenerating: validatedData.ideaGenerating,
       completionPercentage: 0, // Initialize at 0
     });
 
@@ -239,23 +334,87 @@ export async function createHabit(formData: FormData) {
       const startDate = new Date();
       startDate.setHours(0, 0, 0, 0);
       
-      // Create HabitLog entries for each day in the timeline
-      const logEntries = [];
-      for (let i = 0; i < validatedData.timeline; i++) {
-        const logDate = new Date(startDate);
-        logDate.setDate(startDate.getDate() + i);
-        
-        logEntries.push({
-          habitId: habit._id,
-          userId: new mongoose.Types.ObjectId(user.userId),
-          date: logDate,
-          status: "skipped", // Initialize as skipped, will be updated when user marks as done
-        });
+      let datesToCreate: Date[] = [];
+      
+      // For daily habits, create entries for every day in timeline
+      if (validatedData.frequency === "daily") {
+        for (let i = 0; i < validatedData.timeline; i++) {
+          const logDate = new Date(startDate);
+          logDate.setDate(startDate.getDate() + i);
+          datesToCreate.push(logDate);
+        }
+      } else if (
+        validatedData.frequency !== "custom" &&
+        validatedData.startTime &&
+        validatedData.endTime
+      ) {
+        // For weekly/monthly/yearly habits, only create entries for recurring dates
+        datesToCreate = generateRecurringDates(
+          startDate,
+          validatedData.frequency,
+          validatedData.timeline,
+          validatedData.dayOfWeek,
+          validatedData.dayOfMonth,
+          validatedData.month
+        );
       }
+      
+      // Create HabitLog entries
+      const logEntries = datesToCreate.map((date) => ({
+        habitId: habit._id,
+        userId: new mongoose.Types.ObjectId(user.userId),
+        date: date,
+        status: "skipped" as const, // Initialize as skipped, will be updated when user marks as done
+      }));
       
       // Insert all log entries in bulk
       if (logEntries.length > 0) {
         await HabitLog.insertMany(logEntries);
+      }
+    }
+
+    // Generate calendar events for recurring habits (weekly, monthly, yearly) within timeline
+    if (
+      validatedData.timeline &&
+      validatedData.frequency !== "daily" &&
+      validatedData.frequency !== "custom" &&
+      validatedData.startTime &&
+      validatedData.endTime
+    ) {
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      
+      // Generate recurring dates based on frequency
+      const recurringDates = generateRecurringDates(
+        startDate,
+        validatedData.frequency,
+        validatedData.timeline,
+        validatedData.dayOfWeek,
+        validatedData.dayOfMonth,
+        validatedData.month
+      );
+      
+      // Create calendar events for each recurring date
+      const calendarEvents = recurringDates.map((date) => {
+        const eventDate = new Date(date);
+        // Set time to habit start time
+        const [hours, minutes] = validatedData.startTime!.split(":").map(Number);
+        eventDate.setHours(hours, minutes, 0, 0);
+        
+        return {
+          userId: new mongoose.Types.ObjectId(user.userId),
+          title: habit.name,
+          type: "habit" as const,
+          description: `${habit.name} - ${validatedData.category}`,
+          date: eventDate,
+          time: validatedData.startTime,
+          habitId: habit._id,
+        };
+      });
+      
+      // Insert all calendar events in bulk
+      if (calendarEvents.length > 0) {
+        await Calendar.insertMany(calendarEvents);
       }
     }
 
@@ -374,12 +533,13 @@ export async function deleteHabit(habitId: string) {
       return { error: "Habit not found" };
     }
 
-    // Delete related logs and ideas
+    // Delete related logs, ideas, and calendar events
     await HabitLog.deleteMany({ habitId: habit._id, userId: user.userId });
     await Idea.updateMany(
       { habitId: habit._id, userId: user.userId },
       { $unset: { habitId: 1 } }
     );
+    await Calendar.deleteMany({ habitId: habit._id, userId: user.userId });
 
     return { success: true };
   } catch (error: any) {
@@ -567,6 +727,76 @@ export async function getHabitStreak(habitId: string) {
     return { success: true, streak };
   } catch (error: any) {
     return { error: error.message || "Failed to calculate streak" };
+  }
+}
+
+// Helper function to check if a habit should occur on a specific date
+function shouldHabitOccurOnDate(habit: any, date: Date): boolean {
+  const checkDate = new Date(date);
+  checkDate.setHours(0, 0, 0, 0);
+  
+  if (habit.frequency === "daily") {
+    return true;
+  } else if (habit.frequency === "weekly" && habit.dayOfWeek !== undefined) {
+    return checkDate.getDay() === habit.dayOfWeek;
+  } else if (habit.frequency === "monthly" && habit.dayOfMonth !== undefined) {
+    const lastDayOfMonth = new Date(checkDate.getFullYear(), checkDate.getMonth() + 1, 0).getDate();
+    const targetDay = Math.min(habit.dayOfMonth, lastDayOfMonth);
+    return checkDate.getDate() === targetDay;
+  } else if (habit.frequency === "yearly" && habit.month !== undefined && habit.dayOfMonth !== undefined) {
+    const lastDayOfMonth = new Date(checkDate.getFullYear(), habit.month + 1, 0).getDate();
+    const targetDay = Math.min(habit.dayOfMonth, lastDayOfMonth);
+    return checkDate.getMonth() === habit.month && checkDate.getDate() === targetDay;
+  }
+  
+  return false;
+}
+
+// Get habits for a specific date
+export async function getHabitsForDate(date: string) {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    
+    // Get all habits for the user
+    const habits = await Habit.find({ userId: user.userId }).lean();
+    
+    // Filter habits that should occur on this date
+    const habitsForDate = habits.filter((habit: any) => {
+      // Check if habit should occur on this date based on frequency
+      if (!shouldHabitOccurOnDate(habit, checkDate)) {
+        return false;
+      }
+      
+      // Check if date is within timeline (if timeline is set)
+      if (habit.timeline) {
+        const habitStartDate = new Date(habit.createdAt);
+        habitStartDate.setHours(0, 0, 0, 0);
+        const habitEndDate = new Date(habitStartDate);
+        habitEndDate.setDate(habitEndDate.getDate() + habit.timeline);
+        
+        if (checkDate < habitStartDate || checkDate >= habitEndDate) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    // Sort by start time
+    habitsForDate.sort((a: any, b: any) => {
+      if (!a.startTime && !b.startTime) return 0;
+      if (!a.startTime) return 1;
+      if (!b.startTime) return -1;
+      return a.startTime.localeCompare(b.startTime);
+    });
+    
+    return { success: true, habits: JSON.parse(JSON.stringify(habitsForDate)) };
+  } catch (error: any) {
+    return { error: error.message || "Failed to fetch habits for date" };
   }
 }
 

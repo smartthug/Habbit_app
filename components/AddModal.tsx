@@ -15,9 +15,10 @@ interface AddModalProps {
   onClose: () => void;
   defaultTab?: "idea" | "habit" | "note";
   onHabitCreated?: () => void;
+  onIdeaCreated?: () => void;
 }
 
-export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabitCreated }: AddModalProps) {
+export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabitCreated, onIdeaCreated }: AddModalProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"idea" | "habit" | "note">(defaultTab);
   const [loading, setLoading] = useState(false);
@@ -33,6 +34,10 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
   const [customMonths, setCustomMonths] = useState<number>(0);
   const [customDays, setCustomDays] = useState<number>(0);
   const [timeValidationError, setTimeValidationError] = useState<string>("");
+  const [frequency, setFrequency] = useState<string>("daily");
+  const [dayOfWeek, setDayOfWeek] = useState<number>(1); // Monday by default
+  const [dayOfMonth, setDayOfMonth] = useState<number>(1);
+  const [month, setMonth] = useState<number>(0); // January by default
 
   useEffect(() => {
     setActiveTab(defaultTab);
@@ -42,6 +47,10 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
       // Reset form state when modal closes
       setSelectedHabitId("");
       setSelectedCategory("");
+      setFrequency("daily");
+      setDayOfWeek(1);
+      setDayOfMonth(1);
+      setMonth(0);
     }
   }, [defaultTab, isOpen]);
 
@@ -372,6 +381,10 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
       setSelectedHabitId("");
       onClose();
       router.refresh();
+      // Notify parent component to reload ideas
+      if (onIdeaCreated) {
+        onIdeaCreated();
+      }
     } else {
       setError(result.error || "Failed to create idea");
       setLoading(false);
@@ -400,6 +413,16 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     if (startTime) formData.set("startTime", startTime);
     if (endTime) formData.set("endTime", endTime);
 
+    // Add frequency-specific fields
+    if (frequency === "weekly") {
+      formData.set("dayOfWeek", dayOfWeek.toString());
+    } else if (frequency === "monthly") {
+      formData.set("dayOfMonth", dayOfMonth.toString());
+    } else if (frequency === "yearly") {
+      formData.set("month", month.toString());
+      formData.set("dayOfMonth", dayOfMonth.toString());
+    }
+
     // Handle timeline - convert custom duration to days
     let timelineDays = 0;
     if (timelineType === "custom") {
@@ -423,6 +446,10 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
       setTimelineType("preset");
       setCustomMonths(0);
       setCustomDays(0);
+      setFrequency("daily");
+      setDayOfWeek(1);
+      setDayOfMonth(1);
+      setMonth(0);
       onClose();
       router.refresh();
       // Notify parent component to reload habits
@@ -454,7 +481,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl lg:max-w-3xl bg-slate-50 dark:bg-slate-900 rounded-xl sm:rounded-2xl lg:rounded-3xl shadow-premium-xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden flex flex-col">
+      <div className="relative w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl lg:max-w-3xl bg-slate-50 dark:bg-slate-900 rounded-xl sm:rounded-2xl lg:rounded-3xl shadow-premium-xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden flex flex-col pb-safe">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 lg:p-6 border-b border-slate-200/50 dark:border-slate-800/50 flex-shrink-0">
           <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900 dark:text-slate-100">Add New</h2>
@@ -493,7 +520,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6" style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}>
           {error && (
             <div className="mb-4 p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg sm:rounded-xl text-red-600 dark:text-red-400 text-xs sm:text-sm">
               {error}
@@ -502,7 +529,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
 
           {/* Idea Form */}
           {activeTab === "idea" && (
-            <form onSubmit={handleIdeaSubmit} className="space-y-3 sm:space-y-4">
+            <form onSubmit={handleIdeaSubmit} className="space-y-3 sm:space-y-4 pb-4">
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Topic
@@ -573,7 +600,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
 
           {/* Habit Form */}
           {activeTab === "habit" && (
-            <form onSubmit={handleHabitSubmit} className="space-y-3 sm:space-y-4">
+            <form onSubmit={handleHabitSubmit} className="space-y-3 sm:space-y-4 pb-4">
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Routine Name *
@@ -810,6 +837,8 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   </label>
                   <select
                     name="frequency"
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value)}
                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
                   >
                     <option value="daily">Daily</option>
@@ -819,6 +848,95 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   </select>
                 </div>
               </div>
+              
+              {/* Frequency-specific options */}
+              {frequency === "weekly" && (
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
+                    Day of Week
+                  </label>
+                  <select
+                    name="dayOfWeek"
+                    value={dayOfWeek}
+                    onChange={(e) => setDayOfWeek(parseInt(e.target.value))}
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  >
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </div>
+              )}
+              
+              {frequency === "monthly" && (
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
+                    Day of Month
+                  </label>
+                  <select
+                    name="dayOfMonth"
+                    value={dayOfMonth}
+                    onChange={(e) => setDayOfMonth(parseInt(e.target.value))}
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                      <option key={day} value={day}>
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              {frequency === "yearly" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
+                      Month
+                    </label>
+                    <select
+                      name="month"
+                      value={month}
+                      onChange={(e) => setMonth(parseInt(e.target.value))}
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    >
+                      <option value="0">January</option>
+                      <option value="1">February</option>
+                      <option value="2">March</option>
+                      <option value="3">April</option>
+                      <option value="4">May</option>
+                      <option value="5">June</option>
+                      <option value="6">July</option>
+                      <option value="7">August</option>
+                      <option value="8">September</option>
+                      <option value="9">October</option>
+                      <option value="10">November</option>
+                      <option value="11">December</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
+                      Day of Month
+                    </label>
+                    <select
+                      name="dayOfMonth"
+                      value={dayOfMonth}
+                      onChange={(e) => setDayOfMonth(parseInt(e.target.value))}
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    >
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={loading}
@@ -831,7 +949,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
 
           {/* Note Form */}
           {activeTab === "note" && (
-            <form onSubmit={handleNoteSubmit} className="space-y-3 sm:space-y-4">
+            <form onSubmit={handleNoteSubmit} className="space-y-3 sm:space-y-4 pb-4">
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                   Daily Note

@@ -333,7 +333,12 @@ function IdeasPageContent() {
         )}
       </div>
 
-      <AddModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} defaultTab="idea" />
+      <AddModal 
+        isOpen={showAddModal} 
+        onClose={() => setShowAddModal(false)} 
+        defaultTab="idea"
+        onIdeaCreated={loadIdeas}
+      />
       <Navigation />
     </div>
   );

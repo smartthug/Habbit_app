@@ -20,10 +20,11 @@ export default function Navigation() {
     { href: "/profile", icon: User, label: "Profile" },
   ];
 
-  // Menu items for hamburger menu (Habit, Ideas, Analysis, Profile)
+  // Menu items for hamburger menu (Habit, Ideas, Calendar, Analysis, Profile)
   const menuItems = [
     { href: "/habits", icon: Target, label: "Habits" },
     { href: "/ideas", icon: Lightbulb, label: "Ideas" },
+    { href: "/calendar", icon: Calendar, label: "Calendar" },
     { href: "/analysis", icon: BarChart3, label: "Analysis" },
     { href: "/profile", icon: User, label: "Profile" },
   ];

@@ -8,6 +8,10 @@ export interface IHabit extends Document {
   endTime?: string; // Time slot end time (HH:mm format)
   timeline?: number; // Timeline in days (30, 60, 90, etc.)
   frequency: "daily" | "weekly" | "monthly" | "yearly" | "custom";
+  // Frequency-specific settings
+  dayOfWeek?: number; // 0-6 for weekly (0 = Sunday, 1 = Monday, etc.)
+  dayOfMonth?: number; // 1-31 for monthly
+  month?: number; // 0-11 for yearly (0 = January, 11 = December)
   priority: "low" | "medium" | "high";
   reminderTime?: string;
   ideaGenerating?: boolean;
@@ -47,6 +51,21 @@ const HabitSchema: Schema = new Schema(
       type: String,
       enum: ["daily", "weekly", "monthly", "yearly", "custom"],
       default: "daily",
+    },
+    dayOfWeek: {
+      type: Number,
+      min: 0,
+      max: 6,
+    },
+    dayOfMonth: {
+      type: Number,
+      min: 1,
+      max: 31,
+    },
+    month: {
+      type: Number,
+      min: 0,
+      max: 11,
     },
     priority: {
       type: String,

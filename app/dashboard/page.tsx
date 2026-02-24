@@ -292,7 +292,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Current Streak - At the bottom */}
-        <div className="relative overflow-hidden rounded-3xl p-6 md:p-8 lg:p-10 text-white shadow-premium-xl animate-scale-in">
+        <div className="relative overflow-hidden rounded-3xl p-6 md:p-8 lg:p-10 pb-32 md:pb-8 lg:pb-10 text-white shadow-premium-xl animate-scale-in">
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-500 dark:via-purple-500 dark:to-pink-500"></div>
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
           <div className="absolute inset-0 opacity-20" style={{

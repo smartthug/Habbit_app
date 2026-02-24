@@ -8,10 +8,11 @@ import mongoose from "mongoose";
 
 const createCalendarSchema = z.object({
   title: z.string().min(1, "Event title is required"),
-  type: z.enum(["meeting", "event", "birthday"]),
+  type: z.enum(["meeting", "event", "birthday", "habit"]),
   description: z.string().optional(),
   date: z.string(),
   time: z.string().optional(),
+  habitId: z.string().optional(),
   reminderEnabled: z.boolean().optional(),
   reminderMinutesBefore: z.number().optional(),
   location: z.string().optional(),
@@ -59,6 +60,7 @@ export async function createCalendarEvent(formData: FormData) {
       description: validatedData.description,
       date: eventDate,
       time: validatedData.time,
+      habitId: validatedData.habitId ? new mongoose.Types.ObjectId(validatedData.habitId) : undefined,
       reminder: {
         enabled: validatedData.reminderEnabled || false,
         minutesBefore: validatedData.reminderMinutesBefore || 15,
