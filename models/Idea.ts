@@ -4,6 +4,7 @@ export interface IIdea extends Document {
   userId: Types.ObjectId;
   topicId?: Types.ObjectId;
   habitId?: Types.ObjectId;
+  parentId?: Types.ObjectId;
   text: string;
   subTopic?: string;
   description?: string;
@@ -28,6 +29,10 @@ const IdeaSchema: Schema = new Schema(
     habitId: {
       type: Schema.Types.ObjectId,
       ref: "Habit",
+    },
+    parentId: {
+      type: Schema.Types.ObjectId,
+      ref: "Idea",
     },
     text: {
       type: String,

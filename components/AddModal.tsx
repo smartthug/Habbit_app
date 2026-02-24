@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Lightbulb, Target, FileText } from "lucide-react";
-import { createIdea } from "@/app/actions/ideas";
+import { createIdea, getIdeas } from "@/app/actions/ideas";
 import { createHabit } from "@/app/actions/habits";
 import { createOrUpdateDailyLog } from "@/app/actions/dailyLog";
 import { getTopics } from "@/app/actions/topics";
@@ -25,7 +25,9 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
   const [error, setError] = useState("");
   const [topics, setTopics] = useState<any[]>([]);
   const [habits, setHabits] = useState<any[]>([]);
+  const [ideas, setIdeas] = useState<any[]>([]);
   const [selectedHabitId, setSelectedHabitId] = useState<string>("");
+  const [selectedParentId, setSelectedParentId] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [timeAllocation, setTimeAllocation] = useState<any>(null);
   const [startTime, setStartTime] = useState<string>("");
@@ -43,28 +45,38 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     setActiveTab(defaultTab);
     if (isOpen) {
       loadData();
+      // Reset loading and error states when modal opens
+      setLoading(false);
+      setError("");
     } else {
       // Reset form state when modal closes
       setSelectedHabitId("");
+      setSelectedParentId("");
       setSelectedCategory("");
       setFrequency("daily");
       setDayOfWeek(1);
       setDayOfMonth(1);
       setMonth(0);
+      setLoading(false);
+      setError("");
     }
   }, [defaultTab, isOpen]);
 
   async function loadData() {
-    const [topicsResult, habitsResult, profileResult] = await Promise.all([
+    const [topicsResult, habitsResult, profileResult, ideasResult] = await Promise.all([
       getTopics(),
       getHabits(),
       getUserProfile(),
+      getIdeas({}),
     ]);
     if (topicsResult.success) {
       setTopics(topicsResult.topics);
     }
     if (habitsResult.success) {
       setHabits(habitsResult.habits);
+    }
+    if (ideasResult.success) {
+      setIdeas(ideasResult.ideas);
     }
     if (profileResult.success && profileResult.profile) {
       const timeCategories = profileResult.profile.timeCategories;
@@ -375,10 +387,21 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    if (selectedParentId) {
+      formData.set("parentId", selectedParentId);
+    }
     const result = await createIdea(formData);
 
     if (result.success) {
+      setLoading(false);
       setSelectedHabitId("");
+      setSelectedParentId("");
+      setError("");
+      // Reset form if available
+      const form = e.currentTarget;
+      if (form) {
+        form.reset();
+      }
       onClose();
       router.refresh();
       // Notify parent component to reload ideas
@@ -440,6 +463,8 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     const result = await createHabit(formData);
 
     if (result.success) {
+      setLoading(false);
+      setError("");
       setSelectedCategory("");
       setStartTime("");
       setEndTime("");
@@ -450,6 +475,11 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
       setDayOfWeek(1);
       setDayOfMonth(1);
       setMonth(0);
+      // Reset form if available
+      const form = e.currentTarget;
+      if (form) {
+        form.reset();
+      }
       onClose();
       router.refresh();
       // Notify parent component to reload habits
@@ -471,6 +501,13 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     const result = await createOrUpdateDailyLog(formData);
 
     if (result.success) {
+      setLoading(false);
+      setError("");
+      // Reset form if available
+      const form = e.currentTarget;
+      if (form) {
+        form.reset();
+      }
       onClose();
       router.refresh();
     } else {
@@ -575,6 +612,34 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100 resize-none"
                   placeholder="Add a description..."
                 />
+              </div>
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
+                  Link to Parent Idea (Optional)
+                </label>
+                <select
+                  name="parentId"
+                  value={selectedParentId}
+                  onChange={(e) => setSelectedParentId(e.target.value)}
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                >
+                  <option value="">No parent (root idea)</option>
+                  {ideas
+                    .filter((idea: any) => {
+                      // Only show ideas that have less than 2 children
+                      // We'll check this on the server side, but filter here for better UX
+                      return idea.text;
+                    })
+                    .map((idea: any) => (
+                      <option key={idea._id} value={idea._id}>
+                        {idea.text?.substring(0, 50) || "Untitled Idea"}
+                        {idea.text && idea.text.length > 50 ? "..." : ""}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Link this idea to an existing idea to create a tree structure. Each idea can have up to 2 child ideas.
+                </p>
               </div>
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">

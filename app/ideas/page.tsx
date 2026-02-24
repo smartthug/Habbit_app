@@ -2,13 +2,15 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { getIdeas, deleteIdea } from "@/app/actions/ideas";
+import { getIdeas, deleteIdea, getIdeasTree } from "@/app/actions/ideas";
 import { getTopics } from "@/app/actions/topics";
 import { getHabits } from "@/app/actions/habits";
-import { Search, Filter, X, Trash2, Lightbulb, Star, BookOpen } from "lucide-react";
+import { Search, Filter, X, Trash2, Lightbulb, Star, BookOpen, List, Network } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import AddModal from "@/components/AddModal";
 import JournalPage from "@/components/JournalPage";
+import IdeaTree from "@/components/IdeaTree";
+import IdeaGraph from "@/components/IdeaGraph";
 import { format } from "date-fns";
 
 function IdeasPageContent() {
@@ -25,6 +27,9 @@ function IdeasPageContent() {
   const [selectedPriority, setSelectedPriority] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
   const [expandedIdeas, setExpandedIdeas] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"list" | "tree" | "graph">("list");
+  const [treeData, setTreeData] = useState<any[]>([]);
+  const [loadingTree, setLoadingTree] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -34,12 +39,15 @@ function IdeasPageContent() {
     }
   }, [searchParams]);
 
-  const loadIdeas = useCallback(async () => {
+  const loadIdeas = useCallback(async (forceReload = false) => {
     const filters: any = {};
-    if (searchQuery) filters.search = searchQuery;
-    if (selectedTopic) filters.topicId = selectedTopic;
-    if (selectedHabit) filters.habitId = selectedHabit;
-    if (selectedPriority) filters.priority = selectedPriority;
+    // If forceReload is true, don't apply filters (show all ideas)
+    if (!forceReload) {
+      if (searchQuery) filters.search = searchQuery;
+      if (selectedTopic) filters.topicId = selectedTopic;
+      if (selectedHabit) filters.habitId = selectedHabit;
+      if (selectedPriority) filters.priority = selectedPriority;
+    }
 
     const result = await getIdeas(filters);
     if (result.success) {
@@ -47,9 +55,32 @@ function IdeasPageContent() {
     }
   }, [searchQuery, selectedTopic, selectedHabit, selectedPriority]);
 
+  // Separate function to reload all ideas (used when creating new idea)
+  const reloadAllIdeas = useCallback(async () => {
+    const result = await getIdeas({});
+    if (result.success) {
+      setIdeas(result.ideas);
+    }
+  }, []);
+
   useEffect(() => {
     loadIdeas();
   }, [loadIdeas]);
+
+  useEffect(() => {
+    if (viewMode === "tree" || viewMode === "graph") {
+      loadTreeData();
+    }
+  }, [viewMode]);
+
+  async function loadTreeData() {
+    setLoadingTree(true);
+    const result = await getIdeasTree();
+    if (result.success) {
+      setTreeData(result.tree);
+    }
+    setLoadingTree(false);
+  }
 
   async function loadData() {
     setLoading(true);
@@ -123,30 +154,30 @@ function IdeasPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-44 sm:pb-32 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
       <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
-        <div className="flex items-center justify-between mb-6 md:mb-8">
-          <div>
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent dark:from-amber-400 dark:to-orange-500 tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6 md:mb-8">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent dark:from-amber-400 dark:to-orange-500 tracking-tight">
               Idea Vault
             </h1>
-            <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base mt-1 font-medium">Capture and organize your thoughts</p>
+            <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm md:text-base mt-1 font-medium">Capture and organize your thoughts</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
             <button
               onClick={() => setShowJournal(true)}
-              className="tap-target px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg active:shadow-xl active:scale-95 transition-all duration-200 flex items-center gap-2 touch-active no-select text-sm sm:text-base font-semibold"
+              className="tap-target px-3 py-2 sm:px-4 md:px-5 sm:py-2 md:py-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg active:shadow-xl active:scale-95 transition-all duration-200 flex items-center gap-1.5 sm:gap-2 touch-active no-select text-xs sm:text-sm md:text-base font-semibold min-h-[44px]"
               aria-label="Open Journal"
             >
-              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
               <span className="hidden sm:inline">Journal</span>
             </button>
             <button
               onClick={() => setShowAddModal(true)}
-              className="tap-target w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg active:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center touch-active no-select"
+              className="tap-target w-11 h-11 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg active:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center touch-active no-select flex-shrink-0"
               aria-label="Add new idea"
             >
-              <span className="text-2xl sm:text-3xl font-bold">+</span>
+              <span className="text-xl sm:text-2xl md:text-3xl font-bold">+</span>
             </button>
           </div>
         </div>
@@ -163,24 +194,63 @@ function IdeasPageContent() {
           />
         </div>
 
-        {/* Filters */}
-        <div className="mb-4">
+        {/* View Mode Toggle */}
+        <div className="mb-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 bg-slate-50/90 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-xl p-1 flex-1 sm:flex-initial">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`tap-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 sm:gap-2 min-h-[44px] ${
+                viewMode === "list"
+                  ? "bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              <List className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span>List</span>
+            </button>
+            <button
+              onClick={() => setViewMode("tree")}
+              className={`tap-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 sm:gap-2 min-h-[44px] ${
+                viewMode === "tree"
+                  ? "bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              <Network className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span>Tree</span>
+            </button>
+            <button
+              onClick={() => setViewMode("graph")}
+              className={`tap-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 sm:gap-2 min-h-[44px] ${
+                viewMode === "graph"
+                  ? "bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              <Network className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span>Graph</span>
+            </button>
+          </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="tap-target w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 bg-slate-50/90 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-xl text-sm sm:text-base font-semibold text-slate-700 dark:text-slate-300 active:bg-slate-100 dark:active:bg-slate-800 transition-colors shadow-sm touch-active no-select min-h-[48px] hover:scale-[1.02] active:scale-[0.98]"
+            className="tap-target flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50/90 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm md:text-base font-semibold text-slate-700 dark:text-slate-300 active:bg-slate-100 dark:active:bg-slate-800 transition-colors shadow-sm touch-active no-select min-h-[44px] hover:scale-[1.02] active:scale-[0.98]"
           >
-            <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
+            <Filter className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
             <span>Filters</span>
           </button>
+        </div>
+
+        {/* Filters */}
+        <div className="mb-4">
 
           {showFilters && (
-            <div className="mt-3 p-5 bg-slate-50/90 dark:bg-slate-800/80 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700 space-y-4 shadow-lg md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-4 md:space-y-0">
+            <div className="mt-3 p-3 sm:p-4 md:p-5 bg-slate-50/90 dark:bg-slate-800/80 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 sm:space-y-4 shadow-lg md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-4 md:space-y-0">
               <div>
-                <label className="block text-sm font-medium mb-2">Topic</label>
+                <label className="block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">Topic</label>
                 <select
                   value={selectedTopic}
                   onChange={(e) => setSelectedTopic(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
                 >
                   <option value="">All topics</option>
                   {topics.map((topic) => (
@@ -191,11 +261,11 @@ function IdeasPageContent() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Habit</label>
+                <label className="block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">Habit</label>
                 <select
                   value={selectedHabit}
                   onChange={(e) => setSelectedHabit(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
                 >
                   <option value="">All habits</option>
                   {habits.map((habit) => (
@@ -206,11 +276,11 @@ function IdeasPageContent() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Priority</label>
+                <label className="block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">Priority</label>
                 <select
                   value={selectedPriority}
                   onChange={(e) => setSelectedPriority(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-700 rounded-lg bg-slate-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
                 >
                   <option value="">All priorities</option>
                   <option value="normal">Normal</option>
@@ -224,7 +294,7 @@ function IdeasPageContent() {
                     setSelectedHabit("");
                     setSelectedPriority("");
                   }}
-                  className="w-full md:col-span-2 lg:col-span-4 py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 font-medium"
+                  className="w-full md:col-span-2 lg:col-span-4 py-2.5 sm:py-2 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 active:scale-95 transition-transform min-h-[44px] touch-active"
                 >
                   Clear filters
                 </button>
@@ -233,9 +303,38 @@ function IdeasPageContent() {
           )}
         </div>
 
-        {/* Ideas List */}
-        {filteredIdeas.length === 0 ? (
-          <div className="text-center py-16">
+        {/* Ideas Display */}
+        {viewMode === "tree" ? (
+          loadingTree ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 border-4 border-amber-200 dark:border-amber-800 border-t-amber-600 dark:border-t-amber-400 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-slate-600 dark:text-slate-400 font-medium">Loading tree...</p>
+            </div>
+          ) : (
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 border border-slate-200 dark:border-slate-700 overflow-x-auto overflow-y-visible max-w-full mb-24 sm:mb-20 md:mb-4">
+              <div className="min-w-0">
+                <IdeaTree ideas={treeData} onIdeaClick={(ideaId) => {
+                  // Visual feedback is handled by IdeaTree component's selectedNodeId state
+                  // Clicking a node highlights it and allows navigation between related ideas
+                }} />
+              </div>
+            </div>
+          )
+        ) : viewMode === "graph" ? (
+          loadingTree ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 border-4 border-amber-200 dark:border-amber-800 border-t-amber-600 dark:border-t-amber-400 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-slate-600 dark:text-slate-400 font-medium">Loading graph...</p>
+            </div>
+          ) : (
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl sm:rounded-2xl p-2 sm:p-4 md:p-6 border border-slate-200 dark:border-slate-700 overflow-hidden mb-24 sm:mb-20 md:mb-4">
+              <IdeaGraph ideas={treeData} onIdeaClick={(ideaId) => {
+                // Visual feedback is handled by IdeaGraph component's selectedNodeId state
+              }} />
+            </div>
+          )
+        ) : filteredIdeas.length === 0 ? (
+          <div className="text-center py-16 pb-24 sm:pb-20 md:pb-16">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 flex items-center justify-center">
               <Lightbulb className="w-10 h-10 text-amber-500 dark:text-amber-400" />
             </div>
@@ -254,13 +353,13 @@ function IdeasPageContent() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 pb-40 sm:pb-28 md:pb-4">
             {filteredIdeas.map((idea) => {
               const isExpanded = expandedIdeas.has(idea._id);
               return (
                 <div
                   key={idea._id}
-                  className={`group relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-3xl p-6 md:p-7 shadow-premium-lg border-l-4 hover:shadow-premium-xl hover:scale-[1.02] transition-all duration-300 h-full flex flex-col ${
+                  className={`group relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-5 md:p-6 lg:p-7 shadow-premium-lg border-l-4 hover:shadow-premium-xl hover:scale-[1.02] transition-all duration-300 h-full flex flex-col ${
                     idea.priority === "important"
                       ? "border-amber-500"
                       : "border-indigo-500"
@@ -277,7 +376,7 @@ function IdeasPageContent() {
                         </div>
                       )}
                       <p
-                        className={`text-slate-900 dark:text-slate-100 font-semibold text-base md:text-lg leading-relaxed ${
+                        className={`text-slate-900 dark:text-slate-100 font-semibold text-sm sm:text-base md:text-lg leading-relaxed ${
                           isExpanded ? "" : "line-clamp-2"
                         }`}
                       >
@@ -286,9 +385,10 @@ function IdeasPageContent() {
                     </div>
                     <button
                       onClick={() => handleDelete(idea._id)}
-                      className="ml-3 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      className="ml-2 sm:ml-3 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors touch-active min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0"
+                      aria-label="Delete idea"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                   </div>
 
@@ -335,9 +435,21 @@ function IdeasPageContent() {
 
       <AddModal 
         isOpen={showAddModal} 
-        onClose={() => setShowAddModal(false)} 
+        onClose={() => {
+          setShowAddModal(false);
+          if (viewMode === "tree") {
+            loadTreeData();
+          }
+        }} 
         defaultTab="idea"
-        onIdeaCreated={loadIdeas}
+        onIdeaCreated={async () => {
+          // Reload all ideas without filters to show the new idea immediately
+          await reloadAllIdeas();
+          // Also reload tree/graph data if in those views
+          if (viewMode === "tree" || viewMode === "graph") {
+            loadTreeData();
+          }
+        }}
       />
       <Navigation />
     </div>

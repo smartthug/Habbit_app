@@ -11,6 +11,7 @@ const createIdeaSchema = z.object({
   text: z.string().optional(),
   topicId: z.string().optional(),
   habitId: z.string().optional(),
+  parentId: z.string().optional(),
   subTopic: z.string().optional(),
   description: z.string().optional(),
   conceptExplanation: z.string().optional(),
@@ -27,6 +28,7 @@ export async function createIdea(formData: FormData) {
       text: (formData.get("text") as string) || undefined,
       topicId: (formData.get("topicId") as string) || undefined,
       habitId: (formData.get("habitId") as string) || undefined,
+      parentId: (formData.get("parentId") as string) || undefined,
       subTopic: (formData.get("subTopic") as string) || undefined,
       description: (formData.get("description") as string) || undefined,
       conceptExplanation: (formData.get("conceptExplanation") as string) || undefined,
@@ -85,11 +87,34 @@ export async function createIdea(formData: FormData) {
       }
     }
 
+    // Verify parent idea belongs to user if provided
+    let parentId = undefined;
+    if (validatedData.parentId) {
+      const parentIdea = await Idea.findOne({
+        _id: validatedData.parentId,
+        userId: user.userId,
+      });
+      if (!parentIdea) {
+        return { error: "Parent idea not found" };
+      }
+      parentId = new mongoose.Types.ObjectId(validatedData.parentId);
+      
+      // Check if parent already has 2 children (binary tree constraint)
+      const existingChildren = await Idea.countDocuments({
+        parentId: parentId,
+        userId: user.userId,
+      });
+      if (existingChildren >= 2) {
+        return { error: "Parent idea already has maximum children (2)" };
+      }
+    }
+
     const idea = await Idea.create({
       userId: new mongoose.Types.ObjectId(user.userId),
       text: ideaText,
       topicId: topicId,
       habitId: validatedData.habitId ? new mongoose.Types.ObjectId(validatedData.habitId) : undefined,
+      parentId: parentId,
       subTopic: validatedData.subTopic,
       description: validatedData.description,
       conceptExplanation: validatedData.conceptExplanation,
@@ -226,5 +251,47 @@ export async function updateIdea(ideaId: string, formData: FormData) {
     return { success: true, idea: JSON.parse(JSON.stringify(idea)) };
   } catch (error: any) {
     return { error: error.message || "Failed to update idea" };
+  }
+}
+
+export async function getIdeasTree() {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    const ideas = await Idea.find({ userId: user.userId }).sort({ createdAt: -1 }).lean();
+    
+    // Build tree structure
+    const ideaMap = new Map();
+    const roots: any[] = [];
+
+    // First pass: create map of all ideas
+    ideas.forEach((idea: any) => {
+      ideaMap.set(idea._id.toString(), {
+        ...idea,
+        children: [],
+      });
+    });
+
+    // Second pass: build tree
+    ideas.forEach((idea: any) => {
+      const ideaNode = ideaMap.get(idea._id.toString());
+      if (idea.parentId) {
+        const parent = ideaMap.get(idea.parentId.toString());
+        if (parent) {
+          parent.children.push(ideaNode);
+        } else {
+          // Parent not found, treat as root
+          roots.push(ideaNode);
+        }
+      } else {
+        roots.push(ideaNode);
+      }
+    });
+
+    return { success: true, tree: roots };
+  } catch (error: any) {
+    console.error("Error in getIdeasTree:", error);
+    return { success: false, tree: [], error: error.message || "Failed to fetch ideas tree" };
   }
 }

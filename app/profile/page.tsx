@@ -27,6 +27,15 @@ function timeToMinutes(time: string): number {
   return hours * 60 + minutes;
 }
 
+// Helper function to convert 24-hour time to 12-hour format
+function formatTime12Hour(time24: string): string {
+  if (!time24) return "";
+  const [hours, minutes] = time24.split(":").map(Number);
+  const period = hours >= 12 ? "PM" : "AM";
+  const hours12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  return `${hours12}:${minutes.toString().padStart(2, "0")} ${period}`;
+}
+
 // Helper function to calculate duration in minutes from start and end times
 function calculateDuration(startTime: string, endTime: string): number {
   if (!startTime || !endTime) return 0;
@@ -1095,22 +1104,22 @@ export default function ProfilePage() {
                       )}
 
                       {/* Action Buttons */}
-                      <div className="flex gap-3 pt-2">
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
                         <button
                           type="submit"
                           disabled={savingTimeAllocation}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                          className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 text-sm sm:text-base min-h-[44px]"
                         >
-                          <Save className="w-4 h-4" />
-                          <span>{savingTimeAllocation ? "Saving..." : "Save Changes"}</span>
+                          <Save className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">{savingTimeAllocation ? "Saving..." : "Save Changes"}</span>
                         </button>
                         <button
                           type="button"
                           onClick={handleCancelEdit}
                           disabled={savingTimeAllocation}
-                          className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 text-sm sm:text-base min-h-[44px]"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-4 h-4 flex-shrink-0" />
                           <span>Cancel</span>
                         </button>
                       </div>
@@ -1129,7 +1138,7 @@ export default function ProfilePage() {
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Personal Work</p>
                                 {profile.timeCategories.personalWork.startTime && profile.timeCategories.personalWork.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                    {profile.timeCategories.personalWork.startTime} - {profile.timeCategories.personalWork.endTime} • {profile.timeCategories.personalWork.totalHours?.toFixed(1)} hours
+                                    {formatTime12Hour(profile.timeCategories.personalWork.startTime)} - {formatTime12Hour(profile.timeCategories.personalWork.endTime)} • {profile.timeCategories.personalWork.totalHours?.toFixed(1)} hours
                                   </p>
                                 ) : (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
@@ -1139,22 +1148,22 @@ export default function ProfilePage() {
                               </div>
                             </div>
                             {editingCategory === "personalWork" ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                                 <button
                                   onClick={() => handleSaveSingleCategory("personalWork")}
                                   disabled={savingCategory === "personalWork"}
-                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <Save className="w-4 h-4" />
-                                  {savingCategory === "personalWork" ? "Saving..." : "Save"}
+                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span className="truncate">{savingCategory === "personalWork" ? "Saving..." : "Save"}</span>
                                 </button>
                                 <button
                                   onClick={handleCancelEditCategory}
                                   disabled={savingCategory === "personalWork"}
-                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <X className="w-4 h-4" />
-                                  Cancel
+                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span>Cancel</span>
                                 </button>
                               </div>
                             ) : (
@@ -1206,7 +1215,7 @@ export default function ProfilePage() {
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Work Block</p>
                                 {profile.timeCategories.workBlock.startTime && profile.timeCategories.workBlock.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                    {profile.timeCategories.workBlock.startTime} - {profile.timeCategories.workBlock.endTime} • {profile.timeCategories.workBlock.totalHours?.toFixed(1)} hours
+                                    {formatTime12Hour(profile.timeCategories.workBlock.startTime)} - {formatTime12Hour(profile.timeCategories.workBlock.endTime)} • {profile.timeCategories.workBlock.totalHours?.toFixed(1)} hours
                                   </p>
                                 ) : (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
@@ -1216,22 +1225,22 @@ export default function ProfilePage() {
                               </div>
                             </div>
                             {editingCategory === "workBlock" ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                                 <button
                                   onClick={() => handleSaveSingleCategory("workBlock")}
                                   disabled={savingCategory === "workBlock"}
-                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <Save className="w-4 h-4" />
-                                  {savingCategory === "workBlock" ? "Saving..." : "Save"}
+                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span className="truncate">{savingCategory === "workBlock" ? "Saving..." : "Save"}</span>
                                 </button>
                                 <button
                                   onClick={handleCancelEditCategory}
                                   disabled={savingCategory === "workBlock"}
-                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <X className="w-4 h-4" />
-                                  Cancel
+                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span>Cancel</span>
                                 </button>
                               </div>
                             ) : (
@@ -1283,7 +1292,7 @@ export default function ProfilePage() {
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Productive</p>
                                 {profile.timeCategories.productive.startTime && profile.timeCategories.productive.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                    {profile.timeCategories.productive.startTime} - {profile.timeCategories.productive.endTime} • {profile.timeCategories.productive.totalHours?.toFixed(1)} hours
+                                    {formatTime12Hour(profile.timeCategories.productive.startTime)} - {formatTime12Hour(profile.timeCategories.productive.endTime)} • {profile.timeCategories.productive.totalHours?.toFixed(1)} hours
                                   </p>
                                 ) : (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
@@ -1293,22 +1302,22 @@ export default function ProfilePage() {
                               </div>
                             </div>
                             {editingCategory === "productive" ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                                 <button
                                   onClick={() => handleSaveSingleCategory("productive")}
                                   disabled={savingCategory === "productive"}
-                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <Save className="w-4 h-4" />
-                                  {savingCategory === "productive" ? "Saving..." : "Save"}
+                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span className="truncate">{savingCategory === "productive" ? "Saving..." : "Save"}</span>
                                 </button>
                                 <button
                                   onClick={handleCancelEditCategory}
                                   disabled={savingCategory === "productive"}
-                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <X className="w-4 h-4" />
-                                  Cancel
+                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span>Cancel</span>
                                 </button>
                               </div>
                             ) : (
@@ -1360,7 +1369,7 @@ export default function ProfilePage() {
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Family Time (Compulsory)</p>
                                 {profile.timeCategories.familyTime.startTime && profile.timeCategories.familyTime.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                    {profile.timeCategories.familyTime.startTime} - {profile.timeCategories.familyTime.endTime} • {profile.timeCategories.familyTime.totalHours?.toFixed(1)} hours
+                                    {formatTime12Hour(profile.timeCategories.familyTime.startTime)} - {formatTime12Hour(profile.timeCategories.familyTime.endTime)} • {profile.timeCategories.familyTime.totalHours?.toFixed(1)} hours
                                   </p>
                                 ) : (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
@@ -1370,22 +1379,22 @@ export default function ProfilePage() {
                               </div>
                             </div>
                             {editingCategory === "familyTime" ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                                 <button
                                   onClick={() => handleSaveSingleCategory("familyTime")}
                                   disabled={savingCategory === "familyTime"}
-                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <Save className="w-4 h-4" />
-                                  {savingCategory === "familyTime" ? "Saving..." : "Save"}
+                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span className="truncate">{savingCategory === "familyTime" ? "Saving..." : "Save"}</span>
                                 </button>
                                 <button
                                   onClick={handleCancelEditCategory}
                                   disabled={savingCategory === "familyTime"}
-                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <X className="w-4 h-4" />
-                                  Cancel
+                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span>Cancel</span>
                                 </button>
                               </div>
                             ) : (
@@ -1437,7 +1446,7 @@ export default function ProfilePage() {
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Journaling</p>
                                 {profile.timeCategories.journaling.startTime && profile.timeCategories.journaling.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                                    {profile.timeCategories.journaling.startTime} - {profile.timeCategories.journaling.endTime} • {profile.timeCategories.journaling.totalHours?.toFixed(1)} hour{profile.timeCategories.journaling.totalHours !== 1 ? "s" : ""}
+                                    {formatTime12Hour(profile.timeCategories.journaling.startTime)} - {formatTime12Hour(profile.timeCategories.journaling.endTime)} • {profile.timeCategories.journaling.totalHours?.toFixed(1)} hour{profile.timeCategories.journaling.totalHours !== 1 ? "s" : ""}
                                   </p>
                                 ) : (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
@@ -1447,22 +1456,22 @@ export default function ProfilePage() {
                               </div>
                             </div>
                             {editingCategory === "journaling" ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                                 <button
                                   onClick={() => handleSaveSingleCategory("journaling")}
                                   disabled={savingCategory === "journaling"}
-                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <Save className="w-4 h-4" />
-                                  {savingCategory === "journaling" ? "Saving..." : "Save"}
+                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span className="truncate">{savingCategory === "journaling" ? "Saving..." : "Save"}</span>
                                 </button>
                                 <button
                                   onClick={handleCancelEditCategory}
                                   disabled={savingCategory === "journaling"}
-                                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                                 >
-                                  <X className="w-4 h-4" />
-                                  Cancel
+                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                  <span>Cancel</span>
                                 </button>
                               </div>
                             ) : (
