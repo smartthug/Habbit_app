@@ -12,6 +12,7 @@ import JournalPage from "@/components/JournalPage";
 import IdeaTree from "@/components/IdeaTree";
 import IdeaGraph from "@/components/IdeaGraph";
 import { format } from "date-fns";
+import { fetchWithCache, invalidateCache, CACHE_TYPES } from "@/lib/cache";
 
 function IdeasPageContent() {
   const searchParams = useSearchParams();
@@ -49,14 +50,23 @@ function IdeasPageContent() {
       if (selectedPriority) filters.priority = selectedPriority;
     }
 
-    const result = await getIdeas(filters);
-    if (result.success) {
-      setIdeas(result.ideas);
-    }
+    // Use cache for faster loading
+    const result = await fetchWithCache(
+      CACHE_TYPES.IDEAS,
+      async () => {
+        const freshResult = await getIdeas(filters);
+        return freshResult.success ? freshResult.ideas : [];
+      },
+      filters
+    );
+    
+    setIdeas(result);
   }, [searchQuery, selectedTopic, selectedHabit, selectedPriority]);
 
   // Separate function to reload all ideas (used when creating new idea)
   const reloadAllIdeas = useCallback(async () => {
+    // Invalidate cache and fetch fresh data
+    invalidateCache(CACHE_TYPES.IDEAS);
     const result = await getIdeas({});
     if (result.success) {
       setIdeas(result.ideas);
@@ -75,31 +85,49 @@ function IdeasPageContent() {
 
   async function loadTreeData() {
     setLoadingTree(true);
-    const result = await getIdeasTree();
-    if (result.success) {
-      setTreeData(result.tree);
-    }
+    // Use cache for faster loading
+    const result = await fetchWithCache(
+      CACHE_TYPES.IDEAS_TREE,
+      async () => {
+        const freshResult = await getIdeasTree();
+        return freshResult.success ? freshResult.tree : [];
+      }
+    );
+    setTreeData(result);
     setLoadingTree(false);
   }
 
   async function loadData() {
     setLoading(true);
+    
+    // Use cache for faster initial load, then refresh in background
     const [ideasResult, topicsResult, habitsResult] = await Promise.all([
-      getIdeas({}),
-      getTopics(),
-      getHabits(),
+      fetchWithCache(
+        CACHE_TYPES.IDEAS,
+        async () => {
+          const result = await getIdeas({});
+          return result.success ? result.ideas : [];
+        }
+      ),
+      fetchWithCache(
+        CACHE_TYPES.TOPICS,
+        async () => {
+          const result = await getTopics();
+          return result.success ? result.topics : [];
+        }
+      ),
+      fetchWithCache(
+        CACHE_TYPES.HABITS,
+        async () => {
+          const result = await getHabits();
+          return result.success ? result.habits.filter((h: any) => h && h.name) : [];
+        }
+      ),
     ]);
 
-    if (ideasResult.success) {
-      setIdeas(ideasResult.ideas);
-    }
-    if (topicsResult.success) {
-      setTopics(topicsResult.topics);
-    }
-    if (habitsResult.success) {
-      // Filter to show only available habits (habits that exist)
-      setHabits(habitsResult.habits.filter((h: any) => h && h.name));
-    }
+    setIdeas(ideasResult);
+    setTopics(topicsResult);
+    setHabits(habitsResult);
     setLoading(false);
   }
 
@@ -107,6 +135,9 @@ function IdeasPageContent() {
     if (confirm("Are you sure you want to delete this idea?")) {
       const result = await deleteIdea(ideaId);
       if (result.success) {
+        // Invalidate cache after deletion
+        invalidateCache(CACHE_TYPES.IDEAS);
+        invalidateCache(CACHE_TYPES.IDEAS_TREE);
         loadIdeas();
       }
     }
@@ -443,6 +474,9 @@ function IdeasPageContent() {
         }} 
         defaultTab="idea"
         onIdeaCreated={async () => {
+          // Invalidate cache after creating new idea
+          invalidateCache(CACHE_TYPES.IDEAS);
+          invalidateCache(CACHE_TYPES.IDEAS_TREE);
           // Reload all ideas without filters to show the new idea immediately
           await reloadAllIdeas();
           // Also reload tree/graph data if in those views

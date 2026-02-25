@@ -8,10 +8,11 @@ import mongoose from "mongoose";
 
 const createCalendarSchema = z.object({
   title: z.string().min(1, "Event title is required"),
-  type: z.enum(["meeting", "event", "birthday", "habit"]),
+  type: z.enum(["meeting", "todo", "birthday", "habit"]),
   description: z.string().optional(),
   date: z.string(),
   time: z.string().optional(),
+  deadline: z.string().optional(),
   habitId: z.string().optional(),
   reminderEnabled: z.boolean().optional(),
   reminderMinutesBefore: z.number().optional(),
@@ -53,6 +54,13 @@ export async function createCalendarEvent(formData: FormData) {
       eventDate.setHours(0, 0, 0, 0);
     }
 
+    // Parse deadline if provided
+    let deadline: Date | undefined;
+    if (validatedData.deadline) {
+      deadline = new Date(validatedData.deadline);
+      deadline.setHours(23, 59, 59, 999); // Set to end of day
+    }
+
     const calendarEvent = await Calendar.create({
       userId: new mongoose.Types.ObjectId(user.userId),
       title: validatedData.title,
@@ -60,6 +68,7 @@ export async function createCalendarEvent(formData: FormData) {
       description: validatedData.description,
       date: eventDate,
       time: validatedData.time,
+      deadline: deadline,
       habitId: validatedData.habitId ? new mongoose.Types.ObjectId(validatedData.habitId) : undefined,
       reminder: {
         enabled: validatedData.reminderEnabled || false,
@@ -139,10 +148,11 @@ export async function updateCalendarEvent(eventId: string, formData: FormData) {
 
     const rawData = {
       title: (formData.get("title") as string) || "",
-      type: (formData.get("type") as string) || "event",
+      type: (formData.get("type") as string) || "todo",
       description: (formData.get("description") as string) || undefined,
       date: (formData.get("date") as string) || "",
       time: (formData.get("time") as string) || undefined,
+      deadline: (formData.get("deadline") as string) || undefined,
       reminderEnabled: formData.get("reminderEnabled") === "true",
       reminderMinutesBefore: formData.get("reminderMinutesBefore")
         ? parseInt(formData.get("reminderMinutesBefore") as string)
@@ -174,6 +184,13 @@ export async function updateCalendarEvent(eventId: string, formData: FormData) {
       eventDate.setHours(0, 0, 0, 0);
     }
 
+    // Parse deadline if provided
+    let deadline: Date | undefined;
+    if (validatedData.deadline) {
+      deadline = new Date(validatedData.deadline);
+      deadline.setHours(23, 59, 59, 999); // Set to end of day
+    }
+
     const updatedEvent = await Calendar.findByIdAndUpdate(
       eventId,
       {
@@ -182,6 +199,7 @@ export async function updateCalendarEvent(eventId: string, formData: FormData) {
         description: validatedData.description,
         date: eventDate,
         time: validatedData.time,
+        deadline: deadline,
         reminder: {
           enabled: validatedData.reminderEnabled || false,
           minutesBefore: validatedData.reminderMinutesBefore || 15,

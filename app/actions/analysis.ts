@@ -73,19 +73,33 @@ export async function getAnalysisData() {
       date: {
         $gt: tomorrowEnd,
       },
+      type: { $in: ["todo", "meeting", "birthday"] }, // Only show Todo, Meeting, and Birthday
     })
       .sort({ date: 1 })
       .limit(20)
       .lean();
 
+    // Get past incomplete calendar events (pending work from yesterday or past months)
+    const yesterday = addDays(today, -1);
+    const pastIncompleteEvents = await Calendar.find({
+      userId: user.userId,
+      date: {
+        $lt: startOfDay(today), // Before today
+      },
+      type: { $in: ["todo", "meeting", "birthday"] }, // Only Todo, Meeting, and Birthday
+    })
+      .sort({ date: -1 })
+      .limit(50)
+      .lean();
+
     // Combine tasks
     const todayTasks = [
       ...todayHabits.map((h: any) => ({ ...h, type: "habit" })),
-      ...todayEvents.map((e: any) => ({ ...e, type: "event" })),
+      ...todayEvents.map((e: any) => ({ ...e, type: e.type || "todo" })),
     ];
 
     const tomorrowTasks = [
-      ...tomorrowEvents.map((e: any) => ({ ...e, type: "event" })),
+      ...tomorrowEvents.map((e: any) => ({ ...e, type: e.type || "todo" })),
     ];
 
     const completedTasks = [
@@ -94,12 +108,19 @@ export async function getAnalysisData() {
 
     // Pending tasks include all incomplete habits from today (not done)
     // This includes habits with status "pending", "skipped", or null (not logged)
+    // Also include past incomplete calendar events (pending work from yesterday or past months)
     const pendingTasks = [
       ...todayHabits.map((h: any) => ({ ...h, type: "habit" })),
+      ...pastIncompleteEvents.map((e: any) => ({
+        ...e,
+        type: e.type || "todo",
+        name: e.title,
+        title: e.title,
+      })),
     ];
 
     const futureTasks = [
-      ...futureEvents.map((e: any) => ({ ...e, type: "event" })),
+      ...futureEvents.map((e: any) => ({ ...e, type: e.type || "todo" })),
     ];
 
     // Calculate habit consistency

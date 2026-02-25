@@ -23,10 +23,11 @@ export default function CalendarEventModal({
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     title: "",
-    type: "event" as "meeting" | "event" | "birthday",
+    type: "todo" as "meeting" | "todo" | "birthday",
     description: "",
     date: "",
     time: "",
+    deadline: "",
     reminderEnabled: false,
     reminderMinutesBefore: 15,
     location: "",
@@ -42,10 +43,13 @@ export default function CalendarEventModal({
         const eventDate = new Date(event.date);
         setFormData({
           title: event.title || "",
-          type: event.type || "event",
+          type: event.type || "todo",
           description: event.description || "",
           date: eventDate.toISOString().split("T")[0],
           time: event.time || "",
+          deadline: event.deadline
+            ? new Date(event.deadline).toISOString().split("T")[0]
+            : "",
           reminderEnabled: event.reminder?.enabled || false,
           reminderMinutesBefore: event.reminder?.minutesBefore || 15,
           location: event.location || "",
@@ -60,10 +64,11 @@ export default function CalendarEventModal({
         const date = selectedDate || new Date();
         setFormData({
           title: "",
-          type: "event",
+          type: "todo",
           description: "",
           date: date.toISOString().split("T")[0],
           time: "",
+          deadline: "",
           reminderEnabled: false,
           reminderMinutesBefore: 15,
           location: "",
@@ -117,7 +122,7 @@ export default function CalendarEventModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200/50 dark:border-slate-800/50">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-            {event ? "Edit Event" : "New Event"}
+            {event ? "Edit Todo" : "New Todo"}
           </h2>
           <button
             onClick={onClose}
@@ -157,7 +162,7 @@ export default function CalendarEventModal({
               Type *
             </label>
             <div className="grid grid-cols-3 gap-3">
-              {(["meeting", "event", "birthday"] as const).map((type) => (
+              {(["meeting", "todo", "birthday"] as const).map((type) => (
                 <button
                   key={type}
                   type="button"
@@ -201,6 +206,24 @@ export default function CalendarEventModal({
                 className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
               />
             </div>
+          </div>
+
+          {/* Deadline/Completion Date */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+              <Calendar className="w-4 h-4 inline mr-2" />
+              Deadline / Completion Date
+            </label>
+            <input
+              type="date"
+              value={formData.deadline}
+              onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+              className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+              placeholder="Optional deadline"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Set a deadline or completion date for this task
+            </p>
           </div>
 
           {/* Location */}

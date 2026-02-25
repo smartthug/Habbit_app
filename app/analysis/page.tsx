@@ -76,7 +76,7 @@ export default function AnalysisPage() {
     switch (type) {
       case "meeting":
         return "bg-blue-500";
-      case "event":
+      case "todo":
         return "bg-purple-500";
       case "birthday":
         return "bg-pink-500";
@@ -263,12 +263,12 @@ export default function AnalysisPage() {
           </div>
         </div>
 
-        {/* Future Tasks */}
+        {/* Future Plan */}
         <div className="mb-4 sm:mb-6 pb-2">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
-              Future Tasks <span className="text-sm sm:text-base font-semibold text-slate-500 dark:text-slate-400">({futureTasks.length})</span>
+              Future Plan <span className="text-sm sm:text-base font-semibold text-slate-500 dark:text-slate-400">({futureTasks.length})</span>
             </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">

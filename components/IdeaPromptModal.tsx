@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Lightbulb } from "lucide-react";
 import { createIdea } from "@/app/actions/ideas";
 import { useRouter } from "next/navigation";
+import { invalidateCache, CACHE_TYPES } from "@/lib/cache";
 
 interface IdeaPromptModalProps {
   isOpen: boolean;
@@ -41,6 +42,11 @@ export default function IdeaPromptModal({
       setError(result.error);
       setLoading(false);
     } else {
+      // Invalidate cache after creating idea
+      invalidateCache(CACHE_TYPES.IDEAS);
+      invalidateCache(CACHE_TYPES.IDEAS_TREE);
+      invalidateCache(CACHE_TYPES.TOPICS); // Topics might be created/updated
+      
       router.refresh();
       onClose();
       setIdeaText("");

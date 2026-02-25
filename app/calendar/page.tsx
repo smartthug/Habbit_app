@@ -9,6 +9,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalendarIcon, Clock, MapPin, Bell, Repeat, X } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import CalendarEventModal from "@/components/CalendarEventModal";
+import { fetchWithCache, invalidateCache, CACHE_TYPES } from "@/lib/cache";
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -32,25 +33,38 @@ export default function CalendarPage() {
     setLoading(true);
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
-    const result = await getCalendarEvents(
-      start.toISOString(),
-      end.toISOString()
-    );
-    if (result.success) {
-      setEvents(result.events);
-    }
     
-    // Load habits for all days in the month
+    // Use cache for faster loading
+    const monthKey = `${start.toISOString()}_${end.toISOString()}`;
+    const events = await fetchWithCache(
+      CACHE_TYPES.CALENDAR_EVENTS,
+      async () => {
+        const result = await getCalendarEvents(
+          start.toISOString(),
+          end.toISOString()
+        );
+        return result.success ? result.events : [];
+      },
+      { monthKey }
+    );
+    setEvents(events);
+    
+    // Load habits for all days in the month (with caching)
     const habitsMap: Record<string, any[]> = {};
     const daysInMonth = eachDayOfInterval({ start, end });
     
     await Promise.all(
       daysInMonth.map(async (day) => {
         const dateStr = day.toISOString().split('T')[0];
-        const habitsResult = await getHabitsForDate(dateStr);
-        if (habitsResult.success) {
-          habitsMap[dateStr] = habitsResult.habits || [];
-        }
+        const habits = await fetchWithCache(
+          CACHE_TYPES.HABITS_FOR_DATE,
+          async () => {
+            const habitsResult = await getHabitsForDate(dateStr);
+            return habitsResult.success ? (habitsResult.habits || []) : [];
+          },
+          { date: dateStr }
+        );
+        habitsMap[dateStr] = habits;
       })
     );
     
@@ -83,6 +97,8 @@ export default function CalendarPage() {
     if (confirm("Are you sure you want to delete this event?")) {
       const result = await deleteCalendarEvent(eventId);
       if (result.success) {
+        // Invalidate cache after deletion
+        invalidateCache(CACHE_TYPES.CALENDAR_EVENTS);
         loadEvents();
       }
     }
@@ -124,7 +140,7 @@ export default function CalendarPage() {
     switch (type) {
       case "meeting":
         return "bg-blue-500";
-      case "event":
+      case "todo":
         return "bg-purple-500";
       case "birthday":
         return "bg-pink-500";
@@ -139,7 +155,7 @@ export default function CalendarPage() {
     switch (type) {
       case "meeting":
         return "bg-blue-500";
-      case "event":
+      case "todo":
         return "bg-purple-500";
       case "birthday":
         return "bg-pink-500";
@@ -154,14 +170,14 @@ export default function CalendarPage() {
     switch (type) {
       case "meeting":
         return "Meeting";
-      case "event":
-        return "Event";
+      case "todo":
+        return "Todo";
       case "birthday":
         return "Birthday";
       case "habit":
         return "Habit";
       default:
-        return "Event";
+        return "Todo";
     }
   }
 
@@ -179,6 +195,8 @@ export default function CalendarPage() {
         return "📅";
       case "birthday":
         return "🎂";
+      case "todo":
+        return "✅";
       default:
         return "📌";
     }
@@ -257,7 +275,7 @@ export default function CalendarPage() {
                 className="tap-target px-3 sm:px-4 py-2 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center gap-1.5 min-h-[36px] sm:min-h-[44px]"
               >
                 <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-xs sm:text-sm md:text-base hidden sm:inline">New Event</span>
+                <span className="text-xs sm:text-sm md:text-base hidden sm:inline">New Todo</span>
               </button>
             </div>
           </div>
@@ -497,6 +515,8 @@ export default function CalendarPage() {
           setShowEventModal(false);
           setSelectedDate(undefined);
           setSelectedEvent(null);
+          // Invalidate cache after creating/updating event
+          invalidateCache(CACHE_TYPES.CALENDAR_EVENTS);
           loadEvents();
         }}
         selectedDate={selectedDate}

@@ -3,10 +3,11 @@ import mongoose, { Schema, Document, Model, Types } from "mongoose";
 export interface ICalendar extends Document {
   userId: Types.ObjectId;
   title: string;
-  type: "meeting" | "event" | "birthday" | "habit";
+  type: "meeting" | "todo" | "birthday" | "habit";
   description?: string;
   date: Date;
   time?: string;
+  deadline?: Date; // Completion date or deadline
   habitId?: Types.ObjectId; // Link to habit if this is a habit event
   reminder?: {
     enabled: boolean;
@@ -37,9 +38,9 @@ const CalendarSchema: Schema = new Schema(
     },
     type: {
       type: String,
-      enum: ["meeting", "event", "birthday", "habit"],
+      enum: ["meeting", "todo", "birthday", "habit"],
       required: true,
-      default: "event",
+      default: "todo",
     },
     habitId: {
       type: Schema.Types.ObjectId,
@@ -58,6 +59,10 @@ const CalendarSchema: Schema = new Schema(
     time: {
       type: String,
       // Format: "HH:mm" (24-hour format)
+    },
+    deadline: {
+      type: Date,
+      // Completion date or deadline for the task
     },
     reminder: {
       enabled: {

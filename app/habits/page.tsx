@@ -8,6 +8,7 @@ import { Check, X, Trash2, Flame, Lightbulb, Target, Clock } from "lucide-react"
 import Navigation from "@/components/Navigation";
 import AddModal from "@/components/AddModal";
 import IdeaPromptModal from "@/components/IdeaPromptModal";
+import { fetchWithCache, invalidateCache, CACHE_TYPES } from "@/lib/cache";
 
 export default function HabitsPage() {
   const router = useRouter();
@@ -36,17 +37,22 @@ export default function HabitsPage() {
 
   async function loadHabits() {
     setLoading(true);
-    const result = await getHabits();
-    if (result.success) {
-      // Set habits immediately to show UI faster
-      setHabits(result.habits);
-      setLoading(false);
-      
-      // Load streaks and idea counts in background (non-blocking)
-      loadAdditionalData(result.habits);
-    } else {
-      setLoading(false);
-    }
+    
+    // Use cache for faster loading
+    const habits = await fetchWithCache(
+      CACHE_TYPES.HABITS,
+      async () => {
+        const result = await getHabits();
+        return result.success ? result.habits : [];
+      }
+    );
+    
+    // Set habits immediately to show UI faster
+    setHabits(habits);
+    setLoading(false);
+    
+    // Load streaks and idea counts in background (non-blocking)
+    loadAdditionalData(habits);
   }
 
   // Load streaks and idea counts in background without blocking UI
@@ -90,6 +96,9 @@ export default function HabitsPage() {
   const handleLog = useCallback(async (habitId: string, status: "done" | "skipped") => {
     const result = await logHabit(habitId, status);
     if (result.success) {
+      // Invalidate cache after logging habit (completion percentage changes)
+      invalidateCache(CACHE_TYPES.HABITS);
+      
       // If habit is marked as idea generating and was completed, prompt for idea
       if (status === "done") {
         const habit = habits.find((h) => h._id === habitId);
@@ -110,6 +119,12 @@ export default function HabitsPage() {
     if (confirm("Are you sure you want to delete this habit?")) {
       const result = await deleteHabit(habitId);
       if (result.success) {
+        // Invalidate cache after deleting habit
+        invalidateCache(CACHE_TYPES.HABITS);
+        invalidateCache(CACHE_TYPES.CALENDAR_EVENTS); // Habits create calendar events
+        invalidateCache(CACHE_TYPES.HABITS_FOR_DATE); // Habits for date cache
+        invalidateCache(CACHE_TYPES.IDEAS); // Ideas might be linked to habits
+        
         // Remove from local state immediately for instant feedback
         setHabits(prev => prev.filter(h => h._id !== habitId));
         setStreaks(prev => {
@@ -341,9 +356,16 @@ export default function HabitsPage() {
 
       <AddModal 
         isOpen={showAddModal} 
-        onClose={() => setShowAddModal(false)} 
+        onClose={() => {
+          setShowAddModal(false);
+          // Cache is already invalidated in AddModal, just reload
+          loadHabits();
+        }} 
         defaultTab="habit"
-        onHabitCreated={loadHabits}
+        onHabitCreated={() => {
+          // Cache is already invalidated in AddModal
+          loadHabits();
+        }}
       />
       {promptHabit && (
         <IdeaPromptModal

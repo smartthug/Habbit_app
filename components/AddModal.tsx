@@ -9,6 +9,7 @@ import { getTopics } from "@/app/actions/topics";
 import { getHabits } from "@/app/actions/habits";
 import { getUserProfile } from "@/app/actions/profile";
 import { useRouter } from "next/navigation";
+import { invalidateCache, CACHE_TYPES } from "@/lib/cache";
 
 interface AddModalProps {
   isOpen: boolean;
@@ -393,6 +394,11 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     const result = await createIdea(formData);
 
     if (result.success) {
+      // Invalidate cache after creating idea
+      invalidateCache(CACHE_TYPES.IDEAS);
+      invalidateCache(CACHE_TYPES.IDEAS_TREE);
+      invalidateCache(CACHE_TYPES.TOPICS); // Topics might be created/updated
+      
       setLoading(false);
       setSelectedHabitId("");
       setSelectedParentId("");
@@ -463,6 +469,11 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     const result = await createHabit(formData);
 
     if (result.success) {
+      // Invalidate cache after creating habit
+      invalidateCache(CACHE_TYPES.HABITS);
+      invalidateCache(CACHE_TYPES.CALENDAR_EVENTS); // Habits create calendar events
+      invalidateCache(CACHE_TYPES.HABITS_FOR_DATE); // Habits for date cache
+      
       setLoading(false);
       setError("");
       setSelectedCategory("");
