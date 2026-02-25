@@ -6,6 +6,7 @@ import { Lightbulb, Star } from "lucide-react";
 interface IdeaNode {
   _id: string;
   text: string;
+  description?: string;
   priority: "normal" | "important";
   tags: string[];
   createdAt: string;
