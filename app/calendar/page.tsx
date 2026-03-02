@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCalendarEvents, deleteCalendarEvent } from "@/app/actions/calendar";
 import { getTodayJournalCount } from "@/app/actions/journal";
-import { getHabitsForDate } from "@/app/actions/habits";
+import { getHabitsForDateRange, getHabitStatusesForDate, logHabit } from "@/app/actions/habits";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalendarIcon, Clock, MapPin, Bell, Repeat, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalendarIcon, Clock, MapPin, Bell, Repeat, X, Pencil, Edit } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import CalendarEventModal from "@/components/CalendarEventModal";
+import AddModal from "@/components/AddModal";
 import { fetchWithCache, invalidateCache, CACHE_TYPES } from "@/lib/cache";
+import { getHabitById } from "@/app/actions/habits";
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -24,6 +26,10 @@ export default function CalendarPage() {
   const [dateEvents, setDateEvents] = useState<any[]>([]);
   const [modalDate, setModalDate] = useState<Date | null>(null);
   const [habits, setHabits] = useState<Record<string, any[]>>({});
+  const [todayHabitStatuses, setTodayHabitStatuses] = useState<Record<string, "done" | "skipped" | null>>({});
+  const [editMode, setEditMode] = useState(false);
+  const [showHabitEditModal, setShowHabitEditModal] = useState(false);
+  const [selectedHabitForEdit, setSelectedHabitForEdit] = useState<any | null>(null);
 
   useEffect(() => {
     loadEvents();
@@ -31,59 +37,66 @@ export default function CalendarPage() {
 
   async function loadEvents() {
     setLoading(true);
-    const start = startOfMonth(currentDate);
-    const end = endOfMonth(currentDate);
+    // Use the FULL visible range of the calendar (includes leading/trailing days)
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const rangeStart = startOfWeek(monthStart);
+    const rangeEnd = endOfWeek(monthEnd);
     
-    // Use cache for faster loading
-    const monthKey = `${start.toISOString()}_${end.toISOString()}`;
+    // Use cache for faster loading (keyed by visible range)
+    const rangeKey = `${rangeStart.toISOString()}_${rangeEnd.toISOString()}`;
     const events = await fetchWithCache(
       CACHE_TYPES.CALENDAR_EVENTS,
       async () => {
         const result = await getCalendarEvents(
-          start.toISOString(),
-          end.toISOString()
+          rangeStart.toISOString(),
+          rangeEnd.toISOString()
         );
         return result.success ? result.events : [];
       },
-      { monthKey }
+      { rangeKey }
     );
     setEvents(events);
     
-    // Load habits for all days in the month (with caching)
-    const habitsMap: Record<string, any[]> = {};
-    const daysInMonth = eachDayOfInterval({ start, end });
-    
-    await Promise.all(
-      daysInMonth.map(async (day) => {
-        const dateStr = day.toISOString().split('T')[0];
-        const habits = await fetchWithCache(
-          CACHE_TYPES.HABITS_FOR_DATE,
-          async () => {
-            const habitsResult = await getHabitsForDate(dateStr);
-            return habitsResult.success ? (habitsResult.habits || []) : [];
-          },
-          { date: dateStr }
+    // Load habits for the VISIBLE date range in ONE call (with caching)
+    const habitsByDate = await fetchWithCache(
+      CACHE_TYPES.HABITS_FOR_DATE,
+      async () => {
+        const habitsResult = await getHabitsForDateRange(
+          rangeStart.toISOString(),
+          rangeEnd.toISOString()
         );
-        habitsMap[dateStr] = habits;
-      })
+        return habitsResult.success ? (habitsResult.habitsByDate || {}) : {};
+      },
+      { rangeKey },
+      // Cache a bit shorter for interactive calendar usage
+      30 * 60 * 1000
     );
-    
-    setHabits(habitsMap);
+    setHabits(habitsByDate);
     setLoading(false);
   }
 
-  function handleDateClick(date: Date) {
+  async function handleDateClick(date: Date) {
     const eventsForDate = getEventsForDate(date);
-    if (eventsForDate.length > 0) {
-      // Show events list modal
-      setDateEvents(eventsForDate);
-      setModalDate(date);
-      setShowDateEventsModal(true);
+    setDateEvents(eventsForDate);
+    setModalDate(date);
+    setShowDateEventsModal(true);
+
+    // If this is today, load habit completion statuses for accurate Complete/Completed buttons
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const clicked = new Date(date);
+    clicked.setHours(0, 0, 0, 0);
+    if (clicked.getTime() === today.getTime()) {
+      const result = await getHabitStatusesForDate(clicked.toISOString());
+      if (result.success && result.statuses) {
+        setTodayHabitStatuses(result.statuses);
+      } else {
+        setTodayHabitStatuses({});
+      }
     } else {
-      // No events, open create event modal
-      setSelectedDate(date);
-      setSelectedEvent(null);
-      setShowEventModal(true);
+      // Clear statuses for non-today dates
+      setTodayHabitStatuses({});
     }
   }
 
@@ -105,13 +118,11 @@ export default function CalendarPage() {
   }
 
   function getEventsForDate(date: Date) {
-    const calendarEvents = events.filter((event) => {
-      const eventDate = new Date(event.date);
-      return isSameDay(eventDate, date);
-    });
+    const dateStr = date.toISOString().split("T")[0];
+    // Events already grouped & sorted
+    const calendarEvents = eventsByDate[dateStr] || [];
     
     // Get habits for this date
-    const dateStr = date.toISOString().split('T')[0];
     const habitsForDate = habits[dateStr] || [];
     
     // Convert habits to calendar event format and combine with other events
@@ -211,23 +222,53 @@ export default function CalendarPage() {
   const monthEnd = endOfMonth(currentDate);
   const calendarStart = startOfWeek(monthStart);
   const calendarEnd = endOfWeek(monthEnd);
-  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  const calendarDays = useMemo(
+    () => eachDayOfInterval({ start: calendarStart, end: calendarEnd }),
+    [calendarStart.getTime(), calendarEnd.getTime()]
+  );
+
+  // Pre-group events by date string to avoid repeated filtering work
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    events.forEach((event) => {
+      const eventDate = new Date(event.date);
+      const key = eventDate.toISOString().split("T")[0];
+      if (!map[key]) {
+        map[key] = [];
+      }
+      map[key].push(event);
+    });
+    // Sort each day's events once
+    Object.keys(map).forEach((key) => {
+      map[key].sort((a: any, b: any) => {
+        if (!a.time && !b.time) return 0;
+        if (!a.time) return 1;
+        if (!b.time) return -1;
+        return a.time.localeCompare(b.time);
+      });
+    });
+    return map;
+  }, [events]);
 
   // Get upcoming events for list view
-  const upcomingEvents = [...events]
-    .filter((event) => {
-      const eventDate = new Date(event.date);
-      return eventDate >= new Date(new Date().setHours(0, 0, 0, 0));
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.date);
-      const dateB = new Date(b.date);
-      if (dateA.getTime() === dateB.getTime()) {
-        return (a.time || "").localeCompare(b.time || "");
-      }
-      return dateA.getTime() - dateB.getTime();
-    })
-    .slice(0, 20);
+  const upcomingEvents = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return [...events]
+      .filter((event) => {
+        const eventDate = new Date(event.date);
+        return eventDate >= today;
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        if (dateA.getTime() === dateB.getTime()) {
+          return (a.time || "").localeCompare(b.time || "");
+        }
+        return dateA.getTime() - dateB.getTime();
+      })
+      .slice(0, 20);
+  }, [events]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
@@ -517,10 +558,28 @@ export default function CalendarPage() {
           setSelectedEvent(null);
           // Invalidate cache after creating/updating event
           invalidateCache(CACHE_TYPES.CALENDAR_EVENTS);
+          invalidateCache(CACHE_TYPES.HABITS_FOR_DATE);
           loadEvents();
         }}
         selectedDate={selectedDate}
         event={selectedEvent}
+      />
+      <AddModal
+        isOpen={showHabitEditModal}
+        onClose={() => {
+          setShowHabitEditModal(false);
+          setSelectedHabitForEdit(null);
+          // Invalidate cache after updating habit
+          invalidateCache(CACHE_TYPES.HABITS);
+          invalidateCache(CACHE_TYPES.CALENDAR_EVENTS);
+          invalidateCache(CACHE_TYPES.HABITS_FOR_DATE);
+          loadEvents();
+        }}
+        defaultTab="habit"
+        habitToEdit={selectedHabitForEdit}
+        onHabitCreated={() => {
+          loadEvents();
+        }}
       />
       
       {/* Date Events List Modal */}
@@ -537,17 +596,29 @@ export default function CalendarPage() {
                   {dateEvents.length} {dateEvents.length === 1 ? "event" : "events"}
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  setShowDateEventsModal(false);
-                  setDateEvents([]);
-                  setModalDate(null);
-                }}
-                className="tap-target p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-              </button>
+              <div className="flex items-center gap-2">
+                {!editMode && (
+                  <button
+                    onClick={() => setEditMode(true)}
+                    className="tap-target p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    aria-label="Edit"
+                  >
+                    <Pencil className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setShowDateEventsModal(false);
+                    setDateEvents([]);
+                    setModalDate(null);
+                    setEditMode(false);
+                  }}
+                  className="tap-target p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                </button>
+              </div>
             </div>
 
             {/* Events List */}
@@ -556,11 +627,122 @@ export default function CalendarPage() {
                 <div className="text-center py-8">
                   <p className="text-sm text-slate-500 dark:text-slate-400">No events</p>
                 </div>
+              ) : editMode ? (
+                /* Edit Mode - Show all events with edit buttons */
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                      Edit Events
+                    </h3>
+                    <button
+                      onClick={() => setEditMode(false)}
+                      className="tap-target px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {dateEvents.map((event) => {
+                    async function handleEditClick(e: React.MouseEvent) {
+                      e.stopPropagation();
+                      if (event.habitId) {
+                        // Fetch habit data and open habit edit modal
+                        const habitResult = await getHabitById(event.habitId);
+                        if (habitResult.success) {
+                          setSelectedHabitForEdit(habitResult.habit);
+                          setShowHabitEditModal(true);
+                          setShowDateEventsModal(false);
+                          setEditMode(false);
+                        }
+                      } else {
+                        // Open calendar event edit modal
+                        setShowDateEventsModal(false);
+                        setEditMode(false);
+                        setSelectedEvent(event);
+                        setSelectedDate(undefined);
+                        setShowEventModal(true);
+                      }
+                    }
+
+                    return (
+                      <div
+                        key={event._id}
+                        className={`p-3 rounded-lg border ${
+                          event.type === "habit"
+                            ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800"
+                            : "bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">{getEventTypeIcon(event.type)}</span>
+                              <span className={`px-2 py-0.5 rounded-md text-xs font-semibold text-white ${getEventTypeColor(event.type)}`}>
+                                {getEventTypeLabel(event.type)}
+                              </span>
+                              {event.time && (
+                                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                                  {event.time}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className={`text-sm font-semibold mb-1 ${
+                              event.type === "habit"
+                                ? "text-indigo-900 dark:text-indigo-100"
+                                : "text-slate-900 dark:text-slate-100"
+                            }`}>
+                              {event.title}
+                            </h4>
+                            {event.description && (
+                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
+                                {event.description}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={handleEditClick}
+                            className="tap-target p-2 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 transition-colors flex-shrink-0"
+                            aria-label="Edit event"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
+                /* Normal View Mode */
                 <div className="space-y-3">
                   {/* Show all events sorted by time */}
                   <div className="space-y-3">
-                    {dateEvents.map((event) => (
+                    {dateEvents.map((event) => {
+                      const isToday =
+                        modalDate &&
+                        isSameDay(modalDate, new Date());
+                      const habitStatus =
+                        event.habitId && isToday
+                          ? todayHabitStatuses[event.habitId] || null
+                          : null;
+
+                      const isHabitCompleted = habitStatus === "done";
+
+                      async function handleCompleteClick(e: React.MouseEvent) {
+                        e.stopPropagation();
+                        if (!event.habitId || !modalDate || isHabitCompleted) return;
+                        const res = await logHabit(
+                          event.habitId,
+                          "done",
+                          modalDate.toISOString()
+                        );
+                        if (res.success) {
+                          setTodayHabitStatuses((prev) => ({
+                            ...prev,
+                            [event.habitId]: "done",
+                          }));
+                        }
+                      }
+
+                      return (
                       <div
                         key={event._id}
                         onClick={() => {
@@ -611,7 +793,8 @@ export default function CalendarPage() {
                               </p>
                             )}
                           </div>
-                          {!event.habitId && (
+                          {/* Non-habit events can be deleted; habit events for today get Complete/Completed button */}
+                          {!event.habitId ? (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -622,13 +805,25 @@ export default function CalendarPage() {
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
-                          )}
+                          ) : isToday ? (
+                            <button
+                              onClick={handleCompleteClick}
+                              disabled={isHabitCompleted}
+                              className={`tap-target px-2 py-1 rounded-lg text-xs font-semibold flex-shrink-0 ${
+                                isHabitCompleted
+                                  ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 cursor-default"
+                                  : "bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                              }`}
+                            >
+                              {isHabitCompleted ? "Completed" : "Complete"}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                   
-                  {/* Add Event Button */}
+                  {/* Add Todo Button */}
                   <button
                     onClick={() => {
                       setShowDateEventsModal(false);
@@ -639,7 +834,7 @@ export default function CalendarPage() {
                     className="w-full mt-4 p-3 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Add Event</span>
+                    <span>New Todo</span>
                   </button>
                 </div>
               )}

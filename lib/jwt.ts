@@ -33,7 +33,7 @@ export function generateAccessToken(payload: TokenPayload): string {
 export function generateRefreshToken(payload: TokenPayload): string {
   try {
     const token = jwt.sign(payload, JWT_REFRESH_SECRET, {
-      expiresIn: "7d",
+      expiresIn: "25d",
     });
     console.log("[JWT] Refresh token generated, length:", token.length);
     return token;

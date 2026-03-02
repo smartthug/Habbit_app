@@ -208,23 +208,25 @@ export default function CalendarEventModal({
             </div>
           </div>
 
-          {/* Deadline/Completion Date */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              <Calendar className="w-4 h-4 inline mr-2" />
-              Deadline / Completion Date
-            </label>
-            <input
-              type="date"
-              value={formData.deadline}
-              onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-              className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
-              placeholder="Optional deadline"
-            />
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Set a deadline or completion date for this task
-            </p>
-          </div>
+          {/* Deadline/Completion Date (Todo only) */}
+          {formData.type === "todo" && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <Calendar className="w-4 h-4 inline mr-2" />
+                Deadline / Completion Date
+              </label>
+              <input
+                type="date"
+                value={formData.deadline}
+                onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                placeholder="Optional deadline"
+              />
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Set a deadline or completion date for this task
+              </p>
+            </div>
+          )}
 
           {/* Location */}
           <div>

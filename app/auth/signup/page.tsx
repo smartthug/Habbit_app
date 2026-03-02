@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signup } from "@/app/actions/auth";
 import { UserPlus, User, Mail, Lock, Sparkles, Eye, EyeOff } from "lucide-react";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [error, setError] = useState<string>("");
   const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setIsPending(true);
@@ -23,15 +25,16 @@ export default function SignupPage() {
         setError(result.error);
         setIsPending(false);
       } else if (result?.success) {
-        // Cookies are set, now redirect to profile setup
-        window.location.href = "/profile-setup";
+        // Optimistic redirect - don't wait for refresh
+        router.push("/profile-setup");
+        // Refresh in background
+        router.refresh();
       }
     } catch (err: any) {
-      console.error("Signup error:", err);
       setError("An unexpected error occurred. Please try again.");
       setIsPending(false);
     }
-  }
+  }, [router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-8 sm:py-12">

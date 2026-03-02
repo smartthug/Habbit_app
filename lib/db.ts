@@ -29,15 +29,17 @@ async function connectDB(): Promise<typeof mongoose> {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: 3000, // Reduced timeout for faster failure detection
+      socketTimeoutMS: 30000, // Reduced socket timeout
+      maxPoolSize: 10, // Limit connection pool size
+      minPoolSize: 1, // Minimum connections
+      maxIdleTimeMS: 30000, // Close idle connections after 30s
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       return mongoose;
     }).catch((error) => {
       cached.promise = null;
-      console.error("MongoDB connection error:", error);
       throw error;
     });
   }

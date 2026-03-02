@@ -91,6 +91,9 @@ const HabitSchema: Schema = new Schema(
   }
 );
 
+// Indexes for efficient habit queries
+HabitSchema.index({ userId: 1, createdAt: -1 });
+
 const Habit: Model<IHabit> = mongoose.models.Habit || mongoose.model<IHabit>("Habit", HabitSchema);
 
 export default Habit;

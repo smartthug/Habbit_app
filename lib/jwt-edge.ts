@@ -2,7 +2,7 @@
  * JWT utilities for Edge Runtime (middleware)
  * Uses 'jose' library which works in Edge Runtime
  */
-import { jwtVerify } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-change-in-production";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "fallback-refresh-secret-change-in-production";
@@ -34,5 +34,20 @@ export async function verifyRefreshTokenEdge(token: string): Promise<TokenPayloa
     return payload as unknown as TokenPayload;
   } catch (error: any) {
     throw new Error("Invalid or expired refresh token");
+  }
+}
+
+export async function generateAccessTokenEdge(payload: TokenPayload): Promise<string> {
+  try {
+    const secretKey = getSecretKey(JWT_SECRET);
+    const token = await new SignJWT(payload)
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("15m")
+      .sign(secretKey);
+    return token;
+  } catch (error: any) {
+    console.error("[JWT-EDGE] Error generating access token:", error);
+    throw error;
   }
 }

@@ -113,7 +113,10 @@ export async function getCalendarEvents(startDate?: string, endDate?: string, ty
       query.type = type;
     }
 
-    const events = await Calendar.find(query).sort({ date: 1, time: 1 });
+    const events = await Calendar.find(query)
+      .select("title type description date time deadline habitId reminder location recurring")
+      .sort({ date: 1, time: 1 })
+      .lean();
 
     return { success: true, events: JSON.parse(JSON.stringify(events)) };
   } catch (error: any) {
@@ -256,8 +259,10 @@ export async function getUpcomingEvents(limit: number = 5) {
       userId: user.userId,
       date: { $gte: today },
     })
+      .select("title type description date time deadline habitId reminder location recurring")
       .sort({ date: 1, time: 1 })
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
     return { success: true, events: JSON.parse(JSON.stringify(events)) };
   } catch (error: any) {

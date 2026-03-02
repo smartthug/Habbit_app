@@ -337,7 +337,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
+      <div className="max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
         {/* Header */}
         <div className="mb-6 md:mb-8">
           <button
@@ -346,7 +346,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
           >
             ← Back to Ideas
           </button>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
                 <BookOpen className="w-6 h-6 text-white" />
@@ -358,7 +358,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
                 <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base mt-1">Reflect on your day</p>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right w-full sm:w-auto">
               {journalRequirement?.isRequired ? (
                 <div>
                   <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent dark:from-indigo-400 dark:to-purple-400">
@@ -457,7 +457,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
           )}
 
           {/* Category Selection */}
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 sm:p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
               Category *
               {requiredCategories.length > 0 && (
@@ -498,7 +498,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
           </div>
 
           {/* Question 1: What worked? */}
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 sm:p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
             <label className="block text-base font-bold text-slate-900 dark:text-slate-100 mb-4">
               1. What worked? *
             </label>
@@ -519,7 +519,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
           </div>
 
           {/* Question 2: What wasted my time? */}
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 sm:p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
             <label className="block text-base font-bold text-slate-900 dark:text-slate-100 mb-4">
               2. What wasted my time? *
             </label>
@@ -540,7 +540,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
           </div>
 
           {/* Question 3: Where was money generated? */}
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 sm:p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
             <label className="block text-base font-bold text-slate-900 dark:text-slate-100 mb-4">
               3. Where was money generated? *
             </label>
@@ -591,7 +591,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
           </div>
 
           {/* Question 4: Where did I lose energy? */}
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 sm:p-6 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50">
             <label className="block text-base font-bold text-slate-900 dark:text-slate-100 mb-4">
               4. Where did I lose energy? *
             </label>
@@ -616,7 +616,7 @@ export default function JournalPage({ onBack }: JournalPageProps) {
             <label className="block text-base font-bold text-slate-900 dark:text-slate-100 mb-4">
               5. How you feel?
             </label>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <button
                 type="button"
                 onClick={() => setHowYouFeel("sad")}

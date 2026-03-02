@@ -83,7 +83,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, [nodes.length, ideas]);
 
-  // Build graph structure from ideas
+  // Build graph structure from ideas with BINARY TREE layout
   useEffect(() => {
     if (ideas.length === 0) return;
 
@@ -104,7 +104,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
     // Create graph nodes with responsive sizing
     const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
     
-    allNodes.forEach((idea, index) => {
+    allNodes.forEach((idea) => {
       nodeMap.set(idea._id, {
         id: idea._id,
         text: idea.text || idea.description || "",
@@ -127,21 +127,13 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
       }
     });
 
-    // Also create links between siblings and related ideas (same topic/habit)
-    const topicMap = new Map<string, string[]>();
-    const habitMap = new Map<string, string[]>();
+    // BINARY TREE LAYOUT ALGORITHM
+    const HORIZONTAL_SPACING = isMobileView ? 120 : 180;
+    const VERTICAL_SPACING = isMobileView ? 120 : 150;
+    const START_X = isMobileView ? 200 : 400;
+    const START_Y = isMobileView ? 100 : 80;
 
-    allNodes.forEach(idea => {
-      // Group by topic/habit for additional connections
-      // This creates a more connected graph
-    });
-
-    // Layout nodes in a hierarchical mind map style - responsive
-    const centerX = isMobileView ? 200 : 500;
-    const centerY = isMobileView ? 250 : 400;
-    const baseRadius = isMobileView ? 100 : 150;
-
-    // Build a map of parent to children
+    // Build children map
     const childrenMap = new Map<string, IdeaNode[]>();
     allNodes.forEach(idea => {
       if (idea.parentId) {
@@ -153,68 +145,84 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
       }
     });
 
+    // Calculate tree width for each node (for centering)
+    const calculateTreeWidth = (nodeId: string): number => {
+      const children = childrenMap.get(nodeId) || [];
+      if (children.length === 0) return HORIZONTAL_SPACING;
+      
+      let totalWidth = 0;
+      children.forEach(child => {
+        totalWidth += calculateTreeWidth(child._id);
+      });
+      return Math.max(totalWidth, HORIZONTAL_SPACING);
+    };
+
+    // Position nodes in binary tree layout
+    const positionNode = (nodeId: string, x: number, y: number, level: number) => {
+      const node = nodeMap.get(nodeId);
+      if (!node) return x;
+
+      node.x = x;
+      node.y = y;
+
+      const children = childrenMap.get(nodeId) || [];
+      if (children.length === 0) {
+        return x;
+      }
+
+      // Binary tree: max 2 children
+      const leftChild = children[0];
+      const rightChild = children[1];
+
+      let currentX = x;
+      
+      if (leftChild) {
+        const leftTreeWidth = calculateTreeWidth(leftChild._id);
+        const leftX = currentX - leftTreeWidth / 2;
+        positionNode(leftChild._id, leftX, y + VERTICAL_SPACING, level + 1);
+        currentX = leftX + leftTreeWidth / 2;
+      }
+
+      if (rightChild) {
+        const rightTreeWidth = calculateTreeWidth(rightChild._id);
+        const rightX = currentX + HORIZONTAL_SPACING;
+        positionNode(rightChild._id, rightX, y + VERTICAL_SPACING, level + 1);
+      }
+
+      return x;
+    };
+
     // Find root nodes (nodes without parents)
     const rootNodes = allNodes.filter(idea => !idea.parentId);
     
     // Position root nodes
     if (rootNodes.length === 1) {
-      // Single root - place at center
+      // Single root - place at top center
       const root = nodeMap.get(rootNodes[0]._id);
       if (root) {
-        root.x = centerX;
-        root.y = centerY;
+        const treeWidth = calculateTreeWidth(rootNodes[0]._id);
+        positionNode(rootNodes[0]._id, START_X, START_Y, 0);
       }
     } else if (rootNodes.length > 1) {
-      // Multiple roots - arrange in a circle
-      const rootAngleStep = (2 * Math.PI) / rootNodes.length;
-      rootNodes.forEach((rootNode, index) => {
+      // Multiple roots - arrange horizontally
+      let currentX = START_X;
+      rootNodes.forEach((rootNode) => {
         const root = nodeMap.get(rootNode._id);
         if (root) {
-          const angle = rootAngleStep * index;
-          root.x = centerX + baseRadius * 0.8 * Math.cos(angle);
-          root.y = centerY + baseRadius * 0.8 * Math.sin(angle);
+          const treeWidth = calculateTreeWidth(rootNode._id);
+          positionNode(rootNode._id, currentX, START_Y, 0);
+          currentX += treeWidth + HORIZONTAL_SPACING;
         }
       });
     }
 
-    // Recursive function to position children around their parent
-    const positionChildren = (parentId: string, parentX: number, parentY: number, layer: number) => {
-      const children = childrenMap.get(parentId);
-      if (!children || children.length === 0) return;
-
-      const layerRadius = baseRadius * (0.8 + layer * 0.6);
-      const angleStep = (2 * Math.PI) / children.length;
-      const startAngle = -Math.PI / 2; // Start from top
-
-      children.forEach((child, index) => {
-        const childNode = nodeMap.get(child._id);
-        if (childNode && childNode.x === 0 && childNode.y === 0) {
-          const angle = startAngle + angleStep * index;
-          childNode.x = parentX + layerRadius * Math.cos(angle);
-          childNode.y = parentY + layerRadius * Math.sin(angle);
-          
-          // Recursively position this child's children
-          positionChildren(child._id, childNode.x, childNode.y, layer + 1);
-        }
-      });
-    };
-
-    // Position all nodes starting from roots
-    rootNodes.forEach(rootNode => {
-      const root = nodeMap.get(rootNode._id);
-      if (root) {
-        positionChildren(rootNode._id, root.x, root.y, 1);
-      }
-    });
-
     // Position any remaining unpositioned nodes
     Array.from(nodeMap.values()).forEach(node => {
       if (node.x === 0 && node.y === 0) {
-        // Find a random position around the center
-        const angle = Math.random() * 2 * Math.PI;
-        const r = baseRadius * (2 + Math.random());
-        node.x = centerX + r * Math.cos(angle);
-        node.y = centerY + r * Math.sin(angle);
+        // Find a position to the right
+        const maxX = Math.max(...Array.from(nodeMap.values()).map(n => n.x), START_X);
+        node.x = maxX + HORIZONTAL_SPACING;
+        node.y = START_Y;
       }
     });
 
@@ -229,7 +237,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
 
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 0) {
+    if (e.button === 0 && !draggedNode) {
       setIsDragging(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     }
@@ -267,12 +275,16 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
   const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
     setDraggedNode(nodeId);
+    setIsDragging(false);
     const rect = svgRef.current?.getBoundingClientRect();
     if (rect) {
-      setDragStart({
-        x: e.clientX - (nodes.find(n => n.id === nodeId)?.x || 0) * zoom - pan.x,
-        y: e.clientY - (nodes.find(n => n.id === nodeId)?.y || 0) * zoom - pan.y,
-      });
+      const node = nodes.find(n => n.id === nodeId);
+      if (node) {
+        setDragStart({
+          x: e.clientX - node.x * zoom - pan.x,
+          y: e.clientY - node.y * zoom - pan.y,
+        });
+      }
     }
   };
 
@@ -284,8 +296,10 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
       setLastTouch({ x: touch.clientX, y: touch.clientY });
       setTouchMoved(false);
       setTouchStartTime(Date.now());
-      setIsDragging(true);
-      setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+      if (!draggedNode) {
+        setIsDragging(true);
+        setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+      }
     } else if (e.touches.length === 2) {
       e.preventDefault();
       const touch1 = e.touches[0];
@@ -302,7 +316,6 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
       const deltaX = Math.abs(touch.clientX - touchStart.x);
       const deltaY = Math.abs(touch.clientY - touchStart.y);
       
-      // Only prevent default if we're actually panning (moved more than 5px)
       if (deltaX > 5 || deltaY > 5) {
         e.preventDefault();
         setTouchMoved(true);
@@ -344,7 +357,6 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    // Handle tap (not drag) on node
     if (!touchMoved && touchStart && !draggedNode && Date.now() - touchStartTime < 300) {
       const touch = e.changedTouches[0];
       if (touch && svgRef.current) {
@@ -352,7 +364,6 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
         const x = (touch.clientX - rect.left - pan.x) / zoom;
         const y = (touch.clientY - rect.top - pan.y) / zoom;
         
-        // Find clicked node
         const clickedNode = nodes.find(node => {
           const distance = Math.hypot(node.x - x, node.y - y);
           return distance <= node.radius;
@@ -379,6 +390,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
       setDraggedNode(nodeId);
       setTouchMoved(false);
       setTouchStartTime(Date.now());
+      setIsDragging(false);
       const rect = svgRef.current?.getBoundingClientRect();
       if (rect) {
         const node = nodes.find(n => n.id === nodeId);
@@ -406,7 +418,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
   }
 
   return (
-    <div className="relative w-full h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden" style={{ touchAction: 'none' }}>
+    <div className="relative w-full h-[400px] sm:h-[500px] md:h-[600px] lg:h-[700px] bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden" style={{ touchAction: 'none' }}>
       <div
         ref={containerRef}
         className="w-full h-full cursor-move select-none"
@@ -428,7 +440,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
           style={{ cursor: isDragging ? "grabbing" : "grab" }}
         >
           <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-            {/* Draw links */}
+            {/* Draw links - Theme-aware colors */}
             {links.map((link, index) => {
               const sourceNode = nodes.find(n => n.id === link.source);
               const targetNode = nodes.find(n => n.id === link.target);
@@ -441,10 +453,10 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
                   y1={sourceNode.y}
                   x2={targetNode.x}
                   y2={targetNode.y}
-                  stroke="rgb(255, 255, 255)"
-                  strokeWidth="1.5"
-                  className="dark:stroke-slate-300"
-                  opacity="0.8"
+                  stroke="rgb(148, 163, 184)"
+                  strokeWidth="2"
+                  className="dark:stroke-slate-400"
+                  opacity="0.6"
                 />
               );
             })}
@@ -456,24 +468,25 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
 
               return (
                 <g key={node.id}>
-                  {/* Node circle */}
+                  {/* Node circle - Theme-aware colors */}
                   <circle
                     cx={node.x}
                     cy={node.y}
                     r={node.radius}
                     fill={isImportant 
                       ? "rgb(251, 191, 36)" 
-                      : "rgb(203, 213, 225)"}
-                    className={`dark:${isImportant ? "fill-amber-500" : "fill-slate-300"} cursor-pointer transition-all touch-none ${
+                      : "rgb(99, 102, 241)"}
+                    className={`dark:${isImportant ? "fill-amber-500" : "fill-indigo-500"} cursor-move transition-all touch-none ${
                       isSelected ? "ring-4 ring-blue-500 dark:ring-blue-400" : ""
                     }`}
                     onClick={() => handleNodeClick(node.id)}
                     onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                     onTouchStart={(e) => handleNodeTouchStart(e, node.id)}
-                    opacity="0.9"
+                    opacity="0.95"
+                    style={{ filter: isSelected ? "brightness(1.1)" : "none" }}
                   />
                   
-                  {/* Node text - centered on node with wrapping */}
+                  {/* Node text - Theme-aware colors */}
                   {node.text.length <= (isMobile ? 10 : 15) ? (
                     <text
                       x={node.x}
@@ -484,7 +497,8 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
                       className="text-sm font-semibold pointer-events-none select-none"
                       style={{ 
                         fontSize: isMobile ? "10px" : "13px", 
-                        fontWeight: "600" 
+                        fontWeight: "600",
+                        textShadow: "0 1px 2px rgba(0,0,0,0.3)"
                       }}
                     >
                       {node.text}
@@ -500,7 +514,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
                       <div className="w-full h-full flex items-center justify-center text-center px-1 sm:px-2">
                         <p className={`text-white font-semibold leading-tight break-words ${
                           isMobile ? "text-[9px]" : "text-xs"
-                        }`}>
+                        }`} style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
                           {node.text}
                         </p>
                       </div>
@@ -516,7 +530,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
                       height={isMobile ? "16" : "20"}
                       className="pointer-events-none"
                     >
-                      <Star className={`${isMobile ? "w-4 h-4" : "w-5 h-5"} text-amber-500 fill-amber-500`} />
+                      <Star className={`${isMobile ? "w-4 h-4" : "w-5 h-5"} text-amber-600 fill-amber-500 dark:text-amber-400 dark:fill-amber-500`} />
                     </foreignObject>
                   )}
                 </g>
@@ -530,14 +544,14 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 flex flex-col gap-1.5 sm:gap-2 z-10">
         <button
           onClick={() => setZoom(prev => Math.min(2, prev * 1.2))}
-          className="px-3 py-2 sm:px-3 sm:py-2 bg-slate-200/90 dark:bg-slate-700/90 backdrop-blur-sm text-slate-700 dark:text-slate-300 rounded-lg text-base sm:text-sm font-bold sm:font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 active:scale-95 transition-all shadow-md touch-manipulation min-h-[44px] min-w-[44px]"
+          className="px-3 py-2 sm:px-3 sm:py-2 bg-white/90 dark:bg-slate-700/90 backdrop-blur-sm text-slate-700 dark:text-slate-300 rounded-lg text-base sm:text-sm font-bold sm:font-semibold hover:bg-slate-100 dark:hover:bg-slate-600 active:scale-95 transition-all shadow-md touch-manipulation min-h-[44px] min-w-[44px] border border-slate-200 dark:border-slate-600"
           aria-label="Zoom in"
         >
           +
         </button>
         <button
           onClick={() => setZoom(prev => Math.max(0.3, prev * 0.8))}
-          className="px-3 py-2 sm:px-3 sm:py-2 bg-slate-200/90 dark:bg-slate-700/90 backdrop-blur-sm text-slate-700 dark:text-slate-300 rounded-lg text-base sm:text-sm font-bold sm:font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 active:scale-95 transition-all shadow-md touch-manipulation min-h-[44px] min-w-[44px]"
+          className="px-3 py-2 sm:px-3 sm:py-2 bg-white/90 dark:bg-slate-700/90 backdrop-blur-sm text-slate-700 dark:text-slate-300 rounded-lg text-base sm:text-sm font-bold sm:font-semibold hover:bg-slate-100 dark:hover:bg-slate-600 active:scale-95 transition-all shadow-md touch-manipulation min-h-[44px] min-w-[44px] border border-slate-200 dark:border-slate-600"
           aria-label="Zoom out"
         >
           −
@@ -547,7 +561,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
             setPan({ x: 0, y: 0 });
             setZoom(1);
           }}
-          className="px-2.5 py-2 sm:px-3 sm:py-2 bg-slate-200/90 dark:bg-slate-700/90 backdrop-blur-sm text-slate-700 dark:text-slate-300 rounded-lg text-xs sm:text-sm font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 active:scale-95 transition-all shadow-md touch-manipulation min-h-[44px]"
+          className="px-2.5 py-2 sm:px-3 sm:py-2 bg-white/90 dark:bg-slate-700/90 backdrop-blur-sm text-slate-700 dark:text-slate-300 rounded-lg text-xs sm:text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-600 active:scale-95 transition-all shadow-md touch-manipulation min-h-[44px] border border-slate-200 dark:border-slate-600"
           aria-label="Reset view"
         >
           <span className="hidden sm:inline">Reset</span>
@@ -556,13 +570,13 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
       </div>
 
       {/* Instructions - Hidden on mobile */}
-      <div className="hidden sm:block absolute bottom-4 left-4 bg-slate-200/80 dark:bg-slate-800/80 backdrop-blur-sm px-3 py-2 rounded-lg text-xs text-slate-600 dark:text-slate-400">
+      <div className="hidden sm:block absolute bottom-4 left-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm px-3 py-2 rounded-lg text-xs text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
         Drag to pan • Scroll to zoom • Drag nodes to reposition
       </div>
       
       {/* Mobile instructions */}
-      <div className="sm:hidden absolute bottom-2 left-2 right-2 bg-slate-200/90 dark:bg-slate-800/90 backdrop-blur-sm px-2 py-1.5 rounded-lg text-[10px] text-slate-600 dark:text-slate-400 text-center">
-        Pinch to zoom • Drag to pan • Tap nodes to select
+      <div className="sm:hidden absolute bottom-2 left-2 right-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm px-2 py-1.5 rounded-lg text-[10px] text-slate-700 dark:text-slate-300 text-center border border-slate-200 dark:border-slate-700">
+        Pinch to zoom • Drag to pan • Tap nodes to select • Drag nodes to move
       </div>
     </div>
   );

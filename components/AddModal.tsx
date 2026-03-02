@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Lightbulb, Target, FileText } from "lucide-react";
 import { createIdea, getIdeas } from "@/app/actions/ideas";
-import { createHabit } from "@/app/actions/habits";
+import { createHabit, updateHabit } from "@/app/actions/habits";
 import { createOrUpdateDailyLog } from "@/app/actions/dailyLog";
 import { getTopics } from "@/app/actions/topics";
 import { getHabits } from "@/app/actions/habits";
@@ -17,9 +17,10 @@ interface AddModalProps {
   defaultTab?: "idea" | "habit" | "note";
   onHabitCreated?: () => void;
   onIdeaCreated?: () => void;
+  habitToEdit?: any | null;
 }
 
-export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabitCreated, onIdeaCreated }: AddModalProps) {
+export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabitCreated, onIdeaCreated, habitToEdit }: AddModalProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"idea" | "habit" | "note">(defaultTab);
   const [loading, setLoading] = useState(false);
@@ -49,19 +50,53 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
       // Reset loading and error states when modal opens
       setLoading(false);
       setError("");
+      
+      // Pre-fill form if editing a habit
+      if (habitToEdit) {
+        setSelectedCategory(habitToEdit.category || "");
+        setStartTime(habitToEdit.startTime || "");
+        setEndTime(habitToEdit.endTime || "");
+        setFrequency(habitToEdit.frequency || "daily");
+        setDayOfWeek(habitToEdit.dayOfWeek !== undefined ? habitToEdit.dayOfWeek : 1);
+        setDayOfMonth(habitToEdit.dayOfMonth !== undefined ? habitToEdit.dayOfMonth : 1);
+        setMonth(habitToEdit.month !== undefined ? habitToEdit.month : 0);
+        
+        // Handle timeline
+        if (habitToEdit.timeline) {
+          const days = habitToEdit.timeline;
+          if (days === 30 || days === 90 || days === 180 || days === 365) {
+            setTimelineType("preset");
+            setCustomMonths(0);
+            setCustomDays(0);
+          } else {
+            setTimelineType("custom");
+            setCustomMonths(Math.floor(days / 30));
+            setCustomDays(days % 30);
+          }
+        } else {
+          setTimelineType("preset");
+          setCustomMonths(0);
+          setCustomDays(0);
+        }
+      }
     } else {
       // Reset form state when modal closes
       setSelectedHabitId("");
       setSelectedParentId("");
       setSelectedCategory("");
+      setStartTime("");
+      setEndTime("");
       setFrequency("daily");
       setDayOfWeek(1);
       setDayOfMonth(1);
       setMonth(0);
+      setTimelineType("preset");
+      setCustomMonths(0);
+      setCustomDays(0);
       setLoading(false);
       setError("");
     }
-  }, [defaultTab, isOpen]);
+  }, [defaultTab, isOpen, habitToEdit]);
 
   async function loadData() {
     const [topicsResult, habitsResult, profileResult, ideasResult] = await Promise.all([
@@ -430,7 +465,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     // Only validates: time within allocated range and no overlaps
     if (startTime && endTime && selectedCategory) {
       if (!validateTimeSlot(startTime, endTime, selectedCategory)) {
-        setError(timeValidationError);
+        // Don't set top error - timeValidationError is already displayed below the time fields
         setLoading(false);
         return;
       }
@@ -466,10 +501,17 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
       }
     }
 
-    const result = await createHabit(formData);
+    let result;
+    if (habitToEdit) {
+      // Update existing habit
+      result = await updateHabit(habitToEdit._id, formData);
+    } else {
+      // Create new habit
+      result = await createHabit(formData);
+    }
 
     if (result.success) {
-      // Invalidate cache after creating habit
+      // Invalidate cache after creating/updating habit
       invalidateCache(CACHE_TYPES.HABITS);
       invalidateCache(CACHE_TYPES.CALENDAR_EVENTS); // Habits create calendar events
       invalidateCache(CACHE_TYPES.HABITS_FOR_DATE); // Habits for date cache
@@ -498,7 +540,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
         onHabitCreated();
       }
     } else {
-      setError(result.error || "Failed to create habit");
+      setError(result.error || (habitToEdit ? "Failed to update habit" : "Failed to create habit"));
       setLoading(false);
     }
   }
@@ -528,11 +570,13 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl lg:max-w-3xl bg-slate-50 dark:bg-slate-900 rounded-xl sm:rounded-2xl lg:rounded-3xl shadow-premium-xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden flex flex-col pb-safe">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+      <div className="relative w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl lg:max-w-3xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-premium-xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden flex flex-col pb-safe">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-5 lg:p-6 border-b border-slate-200/50 dark:border-slate-800/50 flex-shrink-0">
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900 dark:text-slate-100">Add New</h2>
+        <div className="flex items-center justify-between p-5 sm:p-6 lg:p-7 border-b border-slate-200/60 dark:border-slate-800/60 flex-shrink-0 bg-gradient-to-r from-slate-50/50 to-white/50 dark:from-slate-900/50 dark:to-slate-800/50">
+          <h2 className="text-heading-2 font-bold text-contrast-high">
+            {habitToEdit ? "Edit Habit" : "Add New"}
+          </h2>
           <button
             onClick={onClose}
             className="tap-target p-2 sm:p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95"
@@ -588,7 +632,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   onChange={(e) => {
                     setSelectedHabitId(e.target.value);
                   }}
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="input-premium w-full text-contrast-high focus-visible-premium"
                   autoFocus
                 >
                   <option value="">Select a topic (optional)</option>
@@ -609,7 +653,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                 <input
                   type="text"
                   name="subTopic"
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="input-premium w-full text-contrast-high focus-visible-premium"
                   placeholder="Enter sub topic..."
                 />
               </div>
@@ -632,7 +676,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   name="parentId"
                   value={selectedParentId}
                   onChange={(e) => setSelectedParentId(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="input-premium w-full text-contrast-high focus-visible-premium"
                 >
                   <option value="">No parent (root idea)</option>
                   {ideas
@@ -658,7 +702,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                 </label>
                 <select
                   name="priority"
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="input-premium w-full text-contrast-high focus-visible-premium"
                 >
                   <option value="normal">Normal</option>
                   <option value="important">Important</option>
@@ -667,7 +711,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                className="btn-premium w-full bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 text-white font-semibold hover:shadow-glow-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible-premium"
               >
                 {loading ? "Creating..." : "Create Idea"}
               </button>
@@ -678,14 +722,15 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
           {activeTab === "habit" && (
             <form onSubmit={handleHabitSubmit} className="space-y-3 sm:space-y-4 pb-4">
               <div>
-                <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
+                <label className="block text-sm font-semibold text-contrast-high mb-2">
                   Routine Name *
                 </label>
-                <input
+                  <input
                   type="text"
                   name="name"
                   required
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  defaultValue={habitToEdit?.name || ""}
+                  className="input-premium w-full text-contrast-high placeholder:text-contrast-low focus-visible-premium"
                   placeholder="e.g., Morning Exercise"
                   autoFocus
                 />
@@ -700,7 +745,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   required
                   value={selectedCategory}
                   onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                  className="input-premium w-full text-contrast-high focus-visible-premium"
                 >
                   <option value="">Select a category</option>
                   <option value="personal">Personal Work</option>
@@ -723,7 +768,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                     required={!!selectedCategory}
                     min={getAllocatedTimeRange()?.start}
                     max={getAllocatedTimeRange()?.end}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    className="input-premium w-full text-contrast-high focus-visible-premium"
                   />
                   {selectedCategory && getAllocatedTimeRange() && (
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -743,7 +788,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                     required={!!selectedCategory}
                     min={startTime || getAllocatedTimeRange()?.start}
                     max={getAllocatedTimeRange()?.end}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    className="input-premium w-full text-contrast-high focus-visible-premium"
                   />
                   {selectedCategory && getAllocatedTimeRange() && (
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -845,7 +890,8 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                     <select
                       name="timeline"
                       required={timelineType === "preset"}
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                      defaultValue={habitToEdit?.timeline && [30, 90, 180, 365].includes(habitToEdit.timeline) ? habitToEdit.timeline.toString() : ""}
+                      className="input-premium w-full text-contrast-high focus-visible-premium"
                     >
                       <option value="">Select timeline</option>
                       <option value="30">1 Month</option>
@@ -864,7 +910,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                           min="0"
                           value={customMonths || ""}
                           onChange={(e) => setCustomMonths(parseInt(e.target.value) || 0)}
-                          className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                          className="input-premium w-full text-contrast-high focus-visible-premium"
                           placeholder="0"
                         />
                       </div>
@@ -877,7 +923,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                           min="0"
                           value={customDays || ""}
                           onChange={(e) => setCustomDays(parseInt(e.target.value) || 0)}
-                          className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                          className="input-premium w-full text-contrast-high focus-visible-premium"
                           placeholder="0"
                         />
                       </div>
@@ -900,7 +946,8 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   </label>
                   <select
                     name="priority"
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    defaultValue={habitToEdit?.priority || "medium"}
+                    className="input-premium w-full text-contrast-high focus-visible-premium"
                   >
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
@@ -915,7 +962,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                     name="frequency"
                     value={frequency}
                     onChange={(e) => setFrequency(e.target.value)}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    className="input-premium w-full text-contrast-high focus-visible-premium"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -935,7 +982,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                     name="dayOfWeek"
                     value={dayOfWeek}
                     onChange={(e) => setDayOfWeek(parseInt(e.target.value))}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    className="input-premium w-full text-contrast-high focus-visible-premium"
                   >
                     <option value="0">Sunday</option>
                     <option value="1">Monday</option>
@@ -957,7 +1004,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                     name="dayOfMonth"
                     value={dayOfMonth}
                     onChange={(e) => setDayOfMonth(parseInt(e.target.value))}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                    className="input-premium w-full text-contrast-high focus-visible-premium"
                   >
                     {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                       <option key={day} value={day}>
@@ -978,7 +1025,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                       name="month"
                       value={month}
                       onChange={(e) => setMonth(parseInt(e.target.value))}
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                      className="input-premium w-full text-contrast-high focus-visible-premium"
                     >
                       <option value="0">January</option>
                       <option value="1">February</option>
@@ -1002,7 +1049,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                       name="dayOfMonth"
                       value={dayOfMonth}
                       onChange={(e) => setDayOfMonth(parseInt(e.target.value))}
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+                      className="input-premium w-full text-contrast-high focus-visible-premium"
                     >
                       {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                         <option key={day} value={day}>
@@ -1016,9 +1063,9 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                className="btn-premium w-full bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 text-white font-semibold hover:shadow-glow-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible-premium"
               >
-                {loading ? "Creating..." : "Create Habit"}
+                {loading ? (habitToEdit ? "Updating..." : "Creating...") : (habitToEdit ? "Update Habit" : "Create Habit")}
               </button>
             </form>
           )}
@@ -1041,7 +1088,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg sm:rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                className="btn-premium w-full bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 text-white font-semibold hover:shadow-glow-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible-premium"
               >
                 {loading ? "Saving..." : "Save Note"}
               </button>

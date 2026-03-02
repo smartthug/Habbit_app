@@ -452,6 +452,141 @@ export async function getHabits() {
   }
 }
 
+export async function getHabitById(habitId: string) {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    const habit = await Habit.findOne({
+      _id: habitId,
+      userId: user.userId,
+    }).lean();
+
+    if (!habit) {
+      return { error: "Habit not found" };
+    }
+
+    return { success: true, habit: JSON.parse(JSON.stringify(habit)) };
+  } catch (error: any) {
+    return { error: error.message || "Failed to fetch habit" };
+  }
+}
+
+export async function updateHabit(habitId: string, formData: FormData) {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    // Check if habit belongs to user
+    const existingHabit = await Habit.findOne({
+      _id: habitId,
+      userId: user.userId,
+    });
+
+    if (!existingHabit) {
+      return { error: "Habit not found" };
+    }
+
+    const rawData = {
+      name: (formData.get("name") as string) || "",
+      category: (formData.get("category") as string) || "",
+      startTime: (formData.get("startTime") as string) || undefined,
+      endTime: (formData.get("endTime") as string) || undefined,
+      timeline: formData.get("timeline") ? parseInt(formData.get("timeline") as string) : undefined,
+      frequency: (formData.get("frequency") as string) || "daily",
+      dayOfWeek: formData.get("dayOfWeek") ? parseInt(formData.get("dayOfWeek") as string) : undefined,
+      dayOfMonth: formData.get("dayOfMonth") ? parseInt(formData.get("dayOfMonth") as string) : undefined,
+      month: formData.get("month") ? parseInt(formData.get("month") as string) : undefined,
+      priority: (formData.get("priority") as string) || "medium",
+      reminderTime: (formData.get("reminderTime") as string) || undefined,
+      ideaGenerating: formData.get("ideaGenerating") === "true",
+    };
+
+    const validatedData = createHabitSchema.parse(rawData);
+
+    // Validate time slot if provided (exclude current habit from overlap check)
+    if (validatedData.startTime && validatedData.endTime) {
+      const timeAllocationKey = mapCategoryToTimeAllocation(validatedData.category);
+      if (timeAllocationKey) {
+        const dbUser = await User.findById(user.userId).select("timeCategories").lean();
+        if (dbUser && dbUser.timeCategories) {
+          const timeCategory = (dbUser.timeCategories as any)[timeAllocationKey];
+          
+          if (timeCategory && timeCategory.startTime && timeCategory.endTime) {
+            if (!isTimeRangeWithin(
+              validatedData.startTime,
+              validatedData.endTime,
+              timeCategory.startTime,
+              timeCategory.endTime
+            )) {
+              return {
+                error: `${getCategoryDisplayName(validatedData.category)} habit time (${validatedData.startTime} - ${validatedData.endTime}) is outside the allocated ${getCategoryDisplayName(validatedData.category)} Time range (${timeCategory.startTime} - ${timeCategory.endTime}) in your profile.`
+              };
+            }
+          }
+
+          // Check for overlaps with other habits (excluding current habit)
+          const existingHabits = await Habit.find({
+            userId: user.userId,
+            _id: { $ne: habitId },
+            $or: [
+              { category: validatedData.category },
+              ...(validatedData.category === "work" ? [{ category: "workBlock" }] : []),
+              ...(validatedData.category === "workBlock" ? [{ category: "work" }] : []),
+            ],
+            startTime: { $exists: true, $ne: null },
+            endTime: { $exists: true, $ne: null },
+          }).select("name startTime endTime").lean();
+
+          const overlappingHabit = existingHabits.find((habit: any) => {
+            if (!habit.startTime || !habit.endTime) return false;
+            return timeRangesOverlap(
+              validatedData.startTime!,
+              validatedData.endTime!,
+              habit.startTime,
+              habit.endTime
+            );
+          });
+
+          if (overlappingHabit) {
+            return {
+              error: `Time slot overlaps with existing habit "${overlappingHabit.name}" (${overlappingHabit.startTime} - ${overlappingHabit.endTime}). Please choose a different time slot.`
+            };
+          }
+        }
+      }
+    }
+
+    // Update habit
+    const updatedHabit = await Habit.findByIdAndUpdate(
+      habitId,
+      {
+        name: validatedData.name,
+        category: validatedData.category,
+        startTime: validatedData.startTime,
+        endTime: validatedData.endTime,
+        timeline: validatedData.timeline,
+        frequency: validatedData.frequency,
+        dayOfWeek: validatedData.dayOfWeek,
+        dayOfMonth: validatedData.dayOfMonth,
+        month: validatedData.month,
+        priority: validatedData.priority,
+        reminderTime: validatedData.reminderTime,
+        ideaGenerating: validatedData.ideaGenerating,
+      },
+      { new: true }
+    );
+
+    return { success: true, habit: JSON.parse(JSON.stringify(updatedHabit)) };
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      const firstError = error.errors[0];
+      return { error: `${firstError.path.join(".")}: ${firstError.message}` };
+    }
+    return { error: error.message || "Failed to update habit" };
+  }
+}
+
 // Core categories that must have at least one habit
 const CORE_CATEGORIES = ["personal", "workBlock", "productive", "familyTime", "journal"] as const;
 type CoreCategory = typeof CORE_CATEGORIES[number];
@@ -608,6 +743,31 @@ export async function getHabitLogs(habitId?: string) {
   }
 }
 
+// Get habit log status map for a specific date (habitId -> status)
+export async function getHabitStatusesForDate(date: string) {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    const logDate = new Date(date);
+    logDate.setHours(0, 0, 0, 0);
+
+    const logs = await HabitLog.find({
+      userId: user.userId,
+      date: logDate,
+    }).lean();
+
+    const statusMap: Record<string, "done" | "skipped"> = {};
+    logs.forEach((log: any) => {
+      statusMap[log.habitId.toString()] = log.status;
+    });
+
+    return { success: true, statuses: JSON.parse(JSON.stringify(statusMap)) };
+  } catch (error: any) {
+    return { error: error.message || "Failed to fetch habit statuses for date" };
+  }
+}
+
 export async function getTodayHabits() {
   try {
     const user = await requireAuth();
@@ -761,7 +921,7 @@ export async function getHabitsForDate(date: string) {
     const checkDate = new Date(date);
     checkDate.setHours(0, 0, 0, 0);
     
-    // Get all habits for the user
+    // Get all habits for the user (use lean() for performance)
     const habits = await Habit.find({ userId: user.userId }).lean();
     
     // Filter habits that should occur on this date
@@ -797,6 +957,74 @@ export async function getHabitsForDate(date: string) {
     return { success: true, habits: JSON.parse(JSON.stringify(habitsForDate)) };
   } catch (error: any) {
     return { error: error.message || "Failed to fetch habits for date" };
+  }
+}
+
+// Get habits for a date RANGE (returns map of date -> habits[])
+export async function getHabitsForDateRange(startDate: string, endDate: string) {
+  try {
+    const user = await requireAuth();
+    await connectDB();
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+      return { error: "Invalid date range" };
+    }
+
+    // Fetch all habits once for the user
+    const habits = await Habit.find({ userId: user.userId }).lean();
+
+    const habitsByDate: Record<string, any[]> = {};
+
+    // Iterate over each day in the range and reuse the same occurrence logic
+    for (
+      let cursor = new Date(start);
+      cursor.getTime() <= end.getTime();
+      cursor.setDate(cursor.getDate() + 1)
+    ) {
+      const checkDate = new Date(cursor);
+      checkDate.setHours(0, 0, 0, 0);
+
+      const habitsForDate = habits.filter((habit: any) => {
+        // Frequency-based occurrence check
+        if (!shouldHabitOccurOnDate(habit, checkDate)) {
+          return false;
+        }
+
+        // Timeline window check, if habit has a timeline
+        if (habit.timeline) {
+          const habitStartDate = new Date(habit.createdAt);
+          habitStartDate.setHours(0, 0, 0, 0);
+          const habitEndDate = new Date(habitStartDate);
+          habitEndDate.setDate(habitEndDate.getDate() + habit.timeline);
+
+          if (checkDate < habitStartDate || checkDate >= habitEndDate) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      // Sort by start time for consistent ordering
+      habitsForDate.sort((a: any, b: any) => {
+        if (!a.startTime && !b.startTime) return 0;
+        if (!a.startTime) return 1;
+        if (!b.startTime) return -1;
+        return a.startTime.localeCompare(b.startTime);
+      });
+
+      const dateStr = checkDate.toISOString().split("T")[0];
+      habitsByDate[dateStr] = habitsForDate;
+    }
+
+    return { success: true, habitsByDate: JSON.parse(JSON.stringify(habitsByDate)) };
+  } catch (error: any) {
+    return { error: error.message || "Failed to fetch habits for date range" };
   }
 }
 

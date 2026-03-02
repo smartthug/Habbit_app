@@ -1,50 +1,44 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { login } from "@/app/actions/auth";
 import { LogIn, Mail, Lock, Sparkles, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [error, setError] = useState<string>("");
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setError("");
+    setIsPending(true);
 
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    
-    console.log("[CLIENT] Login form submitted for:", email);
-
-    startTransition(() => {
-      login(formData)
-        .then((result) => {
-          console.log("[CLIENT] Login result received:", result);
-          
-          if (result?.error) {
-            console.error("[CLIENT] Login error:", result.error);
-            setError(result.error);
-          } else if (result?.success) {
-            console.log("[CLIENT] Login successful, redirecting to dashboard...");
-            // Force redirect - cookies should be set by now
-            setTimeout(() => {
-              window.location.href = "/dashboard";
-            }, 100);
-          } else {
-            console.error("[CLIENT] Unexpected result:", result);
-            setError("Login failed. Please try again.");
-          }
-        })
-        .catch((err: any) => {
-          console.error("[CLIENT] Login exception:", err);
-          setError("An unexpected error occurred. Please try again.");
-        });
-    });
-  }
+    try {
+      const formData = new FormData(e.currentTarget);
+      const result = await login(formData);
+      
+      if (result?.error) {
+        setError(result.error);
+        setIsPending(false);
+      } else if (result?.success) {
+        // Optimistic redirect - don't wait for refresh
+        router.push("/dashboard");
+        // Refresh in background
+        router.refresh();
+      } else {
+        setError("Login failed. Please try again.");
+        setIsPending(false);
+      }
+    } catch (err: any) {
+      setError("An unexpected error occurred. Please try again.");
+      setIsPending(false);
+    }
+  }, [router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-8 sm:py-12">

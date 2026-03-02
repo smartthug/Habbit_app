@@ -25,10 +25,9 @@ export default function JournalRequirementGuard({ children }: JournalRequirement
 
   useEffect(() => {
     async function checkRequirements() {
-      // Allow access to journal page, habits page, dashboard, and auth routes
+      // Allow access to journal page, dashboard, and auth routes
       if (
         allowedRoutes.some((route) => pathname?.startsWith(route)) || 
-        pathname?.startsWith("/habits") ||
         pathname?.startsWith("/dashboard")
       ) {
         // Still check requirement to update state, but don't block access
@@ -42,9 +41,9 @@ export default function JournalRequirementGuard({ children }: JournalRequirement
       const requirementResult = await checkJournalRequirement();
       setRequirement(requirementResult);
 
-      // If redirect to habits is needed, redirect immediately
+      // If redirect to habit setup is needed, send user to dashboard
       if (requirementResult.success && requirementResult.redirectToHabits) {
-        router.push("/habits");
+        router.push("/dashboard");
         setLoading(false);
         return;
       }
@@ -56,7 +55,6 @@ export default function JournalRequirementGuard({ children }: JournalRequirement
         requirementResult.isRequired && 
         !requirementResult.isComplete &&
         !pathname?.startsWith("/ideas") &&
-        !pathname?.startsWith("/habits") &&
         !pathname?.startsWith("/dashboard")
       ) {
         router.push("/ideas?journal=true");
@@ -79,7 +77,7 @@ export default function JournalRequirementGuard({ children }: JournalRequirement
     return null;
   }
 
-  // If redirect to habits is needed, show message
+  // If redirect to habit setup is needed, show message
   if (requirement?.success && requirement?.redirectToHabits) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
@@ -90,14 +88,14 @@ export default function JournalRequirementGuard({ children }: JournalRequirement
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">
             Habit Setup Required
           </h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-6">
-            {requirement.reason || "Please create habits before accessing other pages."}
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
+            {requirement.reason || "Please create habits using the Add New button on your dashboard before accessing other pages."}
           </p>
           <button
-            onClick={() => router.push("/habits")}
+            onClick={() => router.push("/dashboard")}
             className="w-full px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
           >
-            <span>Go to Habits</span>
+            <span>Go to Dashboard</span>
           </button>
         </div>
       </div>
@@ -110,14 +108,13 @@ export default function JournalRequirementGuard({ children }: JournalRequirement
   }
 
   // If journal is required but not complete, show restriction message
-  // BUT allow dashboard, habits, and ideas pages
+  // BUT allow dashboard and ideas pages
   if (
     requirement?.success &&
     requirement?.isRequired &&
     !requirement?.isComplete &&
     !allowedRoutes.some((route) => pathname?.startsWith(route)) &&
-    !pathname?.startsWith("/dashboard") &&
-    !pathname?.startsWith("/habits")
+    !pathname?.startsWith("/dashboard")
   ) {
     const missingCount = requirement.missingCategories?.length || 0;
     const completedCount = requirement.completedCategories?.length || 0;

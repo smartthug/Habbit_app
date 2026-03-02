@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifyAccessTokenEdge } from "./lib/jwt-edge";
+import { verifyAccessTokenEdge, verifyRefreshTokenEdge, generateAccessTokenEdge } from "./lib/jwt-edge";
 
 // Public routes that don't require authentication
 const AUTH_ROUTES = ["/auth/login", "/auth/signup"];
@@ -25,10 +25,80 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get("accessToken")?.value;
+  const accessToken = request.cookies.get("accessToken")?.value;
+  const refreshToken = request.cookies.get("refreshToken")?.value;
   const isAuthRoute = AUTH_ROUTES.includes(pathname);
   const isProfileSetupRoute = pathname === PROFILE_SETUP_ROUTE;
-  const isAuthenticated = token ? await verifyToken(token) : false;
+  
+  // Check authentication status and handle token refresh
+  let isAuthenticated = false;
+  let response = NextResponse.next();
+
+  // Try to verify access token first
+  if (accessToken) {
+    try {
+      await verifyAccessTokenEdge(accessToken);
+      isAuthenticated = true;
+    } catch {
+      // Access token expired, try to refresh using refresh token
+      if (refreshToken) {
+        try {
+          const refreshPayload = await verifyRefreshTokenEdge(refreshToken);
+          
+          // Generate new access token
+          const newAccessToken = await generateAccessTokenEdge({
+            userId: refreshPayload.userId,
+            email: refreshPayload.email,
+          });
+
+          // Set new access token cookie
+          response.cookies.set("accessToken", newAccessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/",
+            maxAge: 60 * 15, // 15 minutes
+          });
+
+          isAuthenticated = true;
+          console.log("[MIDDLEWARE] Token refreshed automatically");
+        } catch {
+          // Refresh token also expired, clear cookies
+          response.cookies.delete("accessToken");
+          response.cookies.delete("refreshToken");
+          isAuthenticated = false;
+        }
+      }
+    }
+  } else if (refreshToken) {
+    // No access token but have refresh token, try to refresh
+    try {
+      const refreshPayload = await verifyRefreshTokenEdge(refreshToken);
+      
+      // Generate new access token
+      const newAccessToken = await generateAccessTokenEdge({
+        userId: refreshPayload.userId,
+        email: refreshPayload.email,
+      });
+
+      // Set new access token cookie
+      response.cookies.set("accessToken", newAccessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 15, // 15 minutes
+      });
+
+      isAuthenticated = true;
+      console.log("[MIDDLEWARE] Token refreshed from refresh token");
+    } catch {
+      // Refresh token expired, clear cookies
+      response.cookies.delete("accessToken");
+      response.cookies.delete("refreshToken");
+      isAuthenticated = false;
+    }
+  }
 
   // If authenticated and on auth page → redirect to dashboard
   if (isAuthenticated && isAuthRoute) {
@@ -40,17 +110,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
-  // Allow request to proceed (profile setup check will be done in the page component)
-  return NextResponse.next();
-}
-
-async function verifyToken(token: string): Promise<boolean> {
-  try {
-    await verifyAccessTokenEdge(token);
-    return true;
-  } catch {
-    return false;
-  }
+  // Return response with potentially updated cookies
+  return response;
 }
 
 export const config = {

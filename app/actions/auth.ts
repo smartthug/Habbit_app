@@ -24,22 +24,23 @@ const cookieOptions = {
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
   path: "/",
+  // Ensure cookies persist for 25 days
+  maxAge: 60 * 60 * 24 * 25, // 25 days in seconds
 };
 
 function setAuthCookies(accessToken: string, refreshToken: string) {
   try {
     const cookieStore = cookies();
+    // Set both cookies - optimized single operation
     cookieStore.set("accessToken", accessToken, {
       ...cookieOptions,
       maxAge: 60 * 15, // 15 minutes
     });
     cookieStore.set("refreshToken", refreshToken, {
       ...cookieOptions,
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: 60 * 60 * 24 * 25, // 25 days
     });
-    console.log("[AUTH] Cookies set successfully");
   } catch (error) {
-    console.error("[AUTH] Error setting cookies:", error);
     throw error;
   }
 }
@@ -53,34 +54,36 @@ export async function signup(formData: FormData) {
     };
 
     const validatedData = signupSchema.parse(rawData);
-    await connectDB();
+    
+    // Start password hashing and DB connection in parallel for better performance
+    const [dbConnection, hashedPassword] = await Promise.all([
+      connectDB(),
+      bcrypt.hash(validatedData.password, 10),
+    ]);
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: validatedData.email });
+    // Check if user already exists - use lean() and select() for faster query
+    const existingUser = await User.findOne({ email: validatedData.email })
+      .select("_id")
+      .lean();
     if (existingUser) {
       return { error: "User with this email already exists" };
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
-
-    // Create user
+    // Create user - only select needed fields
     const user = await User.create({
       name: validatedData.name,
       email: validatedData.email,
       password: hashedPassword,
     });
 
-    // Generate tokens
+    // Generate tokens (synchronous operations, but kept for consistency)
     const tokenPayload = {
       userId: user._id.toString(),
       email: user.email,
     };
 
-    console.log("[AUTH] Generating tokens for user:", user.email);
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
-    console.log("[AUTH] Tokens generated, accessToken length:", accessToken.length);
 
     // Set cookies
     setAuthCookies(accessToken, refreshToken);
@@ -88,7 +91,6 @@ export async function signup(formData: FormData) {
     // Return success - client will handle redirect
     return { success: true, user: { id: user._id.toString(), name: user.name, email: user.email } };
   } catch (error: any) {
-    console.error("[AUTH] Signup error:", error);
     if (error instanceof z.ZodError) {
       return { error: error.errors[0].message };
     }
@@ -98,61 +100,90 @@ export async function signup(formData: FormData) {
 
 export async function login(formData: FormData) {
   try {
-    console.log("[AUTH] Login attempt started");
-    
     const rawData = {
       email: formData.get("email") as string,
       password: formData.get("password") as string,
     };
 
-    console.log("[AUTH] Email:", rawData.email);
-
     const validatedData = loginSchema.parse(rawData);
     await connectDB();
 
-    // Find user
-    const user = await User.findOne({ email: validatedData.email });
+    // Find user with only needed fields - use lean() for faster query
+    const user = await User.findOne({ email: validatedData.email })
+      .select("_id email password name")
+      .lean(); // Returns plain JS object, faster than Mongoose document
+
     if (!user) {
-      console.log("[AUTH] User not found");
       return { error: "Invalid email or password" };
     }
-
-    console.log("[AUTH] User found:", user.email);
 
     // Verify password
     const isValidPassword = await bcrypt.compare(validatedData.password, user.password);
     if (!isValidPassword) {
-      console.log("[AUTH] Invalid password");
       return { error: "Invalid email or password" };
     }
 
-    console.log("[AUTH] Password verified");
-
-    // Generate tokens
+    // Generate tokens (synchronous operations, but kept for consistency)
     const tokenPayload = {
       userId: user._id.toString(),
       email: user.email,
     };
 
-    console.log("[AUTH] Generating tokens...");
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
-    console.log("[AUTH] Tokens generated - accessToken length:", accessToken.length);
-    console.log("[AUTH] Token preview:", accessToken.substring(0, 20) + "...");
 
     // Set cookies
-    console.log("[AUTH] Setting cookies...");
     setAuthCookies(accessToken, refreshToken);
-    console.log("[AUTH] Cookies set, returning success");
 
     // Return success - client will handle redirect
     return { success: true, user: { id: user._id.toString(), name: user.name, email: user.email } };
   } catch (error: any) {
-    console.error("[AUTH] Login error:", error);
     if (error instanceof z.ZodError) {
       return { error: error.errors[0].message };
     }
     return { error: error.message || "Login failed" };
+  }
+}
+
+export async function refreshToken() {
+  try {
+    const cookieStore = cookies();
+    const refreshTokenValue = cookieStore.get("refreshToken")?.value;
+
+    if (!refreshTokenValue) {
+      return { error: "No refresh token found" };
+    }
+
+    // Verify refresh token
+    const { verifyRefreshToken } = await import("@/lib/jwt");
+    let payload;
+    try {
+      payload = verifyRefreshToken(refreshTokenValue);
+    } catch (error) {
+      // Refresh token is invalid or expired
+      cookieStore.delete("accessToken");
+      cookieStore.delete("refreshToken");
+      return { error: "Refresh token expired" };
+    }
+
+    // Generate new access token
+    const { generateAccessToken } = await import("@/lib/jwt");
+    const newAccessToken = generateAccessToken({
+      userId: payload.userId,
+      email: payload.email,
+    });
+
+    // Set new access token cookie
+    cookieStore.set("accessToken", newAccessToken, {
+      ...cookieOptions,
+      maxAge: 60 * 15, // 15 minutes
+    });
+
+    console.log("[AUTH] Token refreshed successfully");
+    return { success: true, accessToken: newAccessToken };
+  } catch (error: any) {
+    console.error("[AUTH] Token refresh error:", error);
+    return { error: error.message || "Token refresh failed" };
   }
 }
 
