@@ -10,6 +10,7 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "fallback-refresh-s
 export interface TokenPayload {
   userId: string;
   email: string;
+  [key: string]: unknown; // Index signature for JWTPayload compatibility
 }
 
 // Create secret keys for Edge Runtime
