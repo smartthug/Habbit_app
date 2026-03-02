@@ -18,32 +18,34 @@ export async function getCurrentUser(): Promise<TokenPayload | null> {
         const payload = verifyAccessToken(accessToken);
         return payload;
       } catch (error) {
-        // Access token expired, check if refresh token exists
-        // Token refresh will be handled by middleware or refresh action
-        console.log("[AUTH] Access token expired, refresh token check needed");
+        // Access token expired, check if refresh token is valid
+        // Token refresh will be handled by refreshToken server action or middleware
+        if (refreshTokenValue) {
+          try {
+            const refreshPayload = verifyRefreshToken(refreshTokenValue);
+            // Refresh token is valid, return user
+            // Note: Token refresh happens in middleware or via refreshToken action
+            return refreshPayload;
+          } catch (error) {
+            // Refresh token is also invalid/expired
+            return null;
+          }
+        }
       }
-    }
-
-    // Access token expired or missing, check if refresh token is valid
-    // Note: We can't modify cookies here (Server Component limitation)
-    // Token refresh should happen in middleware or via server action
-    if (refreshTokenValue) {
+    } else if (refreshTokenValue) {
+      // No access token, check refresh token
       try {
         const refreshPayload = verifyRefreshToken(refreshTokenValue);
-        // Refresh token is valid, return payload
-        // Middleware will handle setting new access token
-        console.log("[AUTH] Refresh token valid, returning user (token refresh handled by middleware)");
+        // Refresh token is valid, return user
         return refreshPayload;
       } catch (error) {
-        // Refresh token is also invalid/expired
-        console.log("[AUTH] Refresh token expired");
+        // Refresh token expired
         return null;
       }
     }
 
     return null;
   } catch (error) {
-    console.error("[AUTH] Error in getCurrentUser:", error);
     return null;
   }
 }

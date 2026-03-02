@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifyAccessTokenEdge, verifyRefreshTokenEdge, generateAccessTokenEdge } from "./lib/jwt-edge";
+import { verifyAccessTokenEdge, verifyRefreshTokenEdge } from "./lib/jwt-edge";
 
 // Public routes that don't require authentication
 const AUTH_ROUTES = ["/auth/login", "/auth/signup"];
@@ -11,39 +11,9 @@ const PROFILE_SETUP_ROUTE = "/profile-setup";
 // Routes that should be excluded from middleware
 const EXCLUDED_PATHS = [
   "/_next",
-  "/api/auth",
+  "/api",
   "/favicon",
-  "/api/auth/test-cookie",
-  "/api/auth/debug-login",
 ];
-
-// Helper function to refresh token and set cookie
-async function refreshAndSetToken(
-  refreshToken: string,
-  response: NextResponse
-): Promise<{ success: boolean; userId?: string; email?: string }> {
-  try {
-    const refreshPayload = await verifyRefreshTokenEdge(refreshToken);
-    const newAccessToken = await generateAccessTokenEdge({
-      userId: refreshPayload.userId,
-      email: refreshPayload.email,
-    });
-
-    response.cookies.set("accessToken", newAccessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 15,
-    });
-
-    return { success: true, userId: refreshPayload.userId, email: refreshPayload.email };
-  } catch {
-    response.cookies.delete("accessToken");
-    response.cookies.delete("refreshToken");
-    return { success: false };
-  }
-}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -59,7 +29,6 @@ export async function middleware(request: NextRequest) {
   const isProfileSetupRoute = pathname === PROFILE_SETUP_ROUTE;
   
   let isAuthenticated = false;
-  let response = NextResponse.next();
 
   // Verify access token
   if (accessToken) {
@@ -67,16 +36,25 @@ export async function middleware(request: NextRequest) {
       await verifyAccessTokenEdge(accessToken);
       isAuthenticated = true;
     } catch {
-      // Access token expired, try refresh
+      // Access token expired, check if refresh token exists
+      // Token refresh will be handled by getCurrentUser() in server components
       if (refreshToken) {
-        const refreshResult = await refreshAndSetToken(refreshToken, response);
-        isAuthenticated = refreshResult.success;
+        try {
+          await verifyRefreshTokenEdge(refreshToken);
+          isAuthenticated = true; // Refresh token valid, allow through
+        } catch {
+          isAuthenticated = false;
+        }
       }
     }
   } else if (refreshToken) {
-    // No access token, try refresh
-    const refreshResult = await refreshAndSetToken(refreshToken, response);
-    isAuthenticated = refreshResult.success;
+    // No access token, check refresh token
+    try {
+      await verifyRefreshTokenEdge(refreshToken);
+      isAuthenticated = true; // Refresh token valid, allow through
+    } catch {
+      isAuthenticated = false;
+    }
   }
 
   // Handle redirects
@@ -88,7 +66,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
