@@ -19,9 +19,10 @@ const loginSchema = z.object({
 });
 
 // Cookie configuration - single source of truth
+// In Vercel, always use secure: true since it uses HTTPS
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  secure: true, // Always secure (Vercel uses HTTPS)
   sameSite: "lax" as const,
   path: "/",
   // Ensure cookies persist for 25 days

@@ -48,7 +48,6 @@ export async function generateAccessTokenEdge(payload: TokenPayload): Promise<st
       .sign(secretKey);
     return token;
   } catch (error: any) {
-    console.error("[JWT-EDGE] Error generating access token:", error);
     throw error;
   }
 }
