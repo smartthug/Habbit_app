@@ -128,8 +128,8 @@ const UserSchema: Schema = new Schema(
   }
 );
 
-// Add index on email for faster login/signup queries
-UserSchema.index({ email: 1 }, { unique: true });
+// Note: email field already has unique: true which creates an index automatically
+// No need to add a duplicate index
 
 const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
 

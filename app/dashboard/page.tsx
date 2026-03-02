@@ -13,6 +13,9 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import { redirect } from "next/navigation";
 
+// Mark as dynamic since we use cookies
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   // Debug in development only
   await debugAuth("/dashboard");
