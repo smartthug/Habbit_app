@@ -1,6 +1,9 @@
 /**
  * JWT utilities for Edge Runtime (middleware)
  * Uses 'jose' library which works in Edge Runtime
+ * 
+ * NOTE: Currently not used - middleware has been simplified to only check cookie existence
+ * This file is kept for potential future use if token verification in middleware is needed
  */
 import { jwtVerify, SignJWT } from "jose";
 
