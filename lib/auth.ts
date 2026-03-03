@@ -18,18 +18,22 @@ export async function getCurrentUser(): Promise<TokenPayload | null> {
         const payload = verifyAccessToken(accessToken);
         return payload;
       } catch (error) {
-        // Access token expired, check if refresh token is valid
-        // Token refresh will be handled by refreshToken server action or middleware
+        // Access token expired or invalid, check if refresh token is valid
         if (refreshTokenValue) {
           try {
             const refreshPayload = verifyRefreshToken(refreshTokenValue);
             // Refresh token is valid, return user
-            // Note: Token refresh happens in middleware or via refreshToken action
+            // Note: Token refresh happens via refreshToken action or API route
             return refreshPayload;
           } catch (error) {
-            // Refresh token is also invalid/expired
+            // Both tokens are invalid/expired - clear cookies
+            // Note: We can't modify cookies in this function (server component context)
+            // Middleware or API routes will handle cookie clearing
             return null;
           }
+        } else {
+          // Access token invalid and no refresh token
+          return null;
         }
       }
     } else if (refreshTokenValue) {
@@ -39,13 +43,14 @@ export async function getCurrentUser(): Promise<TokenPayload | null> {
         // Refresh token is valid, return user
         return refreshPayload;
       } catch (error) {
-        // Refresh token expired
+        // Refresh token expired or invalid
         return null;
       }
     }
 
     return null;
   } catch (error) {
+    // Any error in token verification means user is not authenticated
     return null;
   }
 }

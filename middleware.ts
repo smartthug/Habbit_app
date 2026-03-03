@@ -16,7 +16,8 @@ const EXCLUDED_PATHS = [
 
 /**
  * Minimal middleware for Vercel Edge Runtime
- * Only checks for cookie existence - actual authentication happens in server components
+ * Validates cookie existence and format (non-empty strings) without heavy JWT verification
+ * Actual token verification happens in server components for better error handling
  * This keeps middleware lightweight and compatible with Edge Runtime
  */
 export function middleware(request: NextRequest) {
@@ -27,22 +28,34 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for authentication cookies (no verification - that happens in server components)
-  const hasAccessToken = request.cookies.has("accessToken");
-  const hasRefreshToken = request.cookies.has("refreshToken");
-  const hasAuthCookies = hasAccessToken || hasRefreshToken;
+  // Check for authentication cookies and validate they're non-empty strings
+  // This prevents invalid/empty cookies from passing through
+  const accessToken = request.cookies.get("accessToken")?.value;
+  const refreshToken = request.cookies.get("refreshToken")?.value;
+  const hasValidAccessToken = accessToken && accessToken.length > 0;
+  const hasValidRefreshToken = refreshToken && refreshToken.length > 0;
+  const hasAuthCookies = hasValidAccessToken || hasValidRefreshToken;
   
   const isAuthRoute = AUTH_ROUTES.includes(pathname);
   const isProfileSetupRoute = pathname === PROFILE_SETUP_ROUTE;
 
-  // If authenticated (has cookies) and on auth page → redirect to dashboard
+  // If authenticated (has valid cookies) and on auth page → redirect to dashboard
   if (hasAuthCookies && isAuthRoute) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // If not authenticated (no cookies) and on protected route → redirect to login
+  // If not authenticated (no valid cookies) and on protected route → redirect to login
+  // Also clear invalid cookies if they exist
   if (!hasAuthCookies && !isAuthRoute && !isProfileSetupRoute) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
+    const response = NextResponse.redirect(new URL("/auth/login", request.url));
+    
+    // Clear invalid/empty cookies if they exist
+    if (accessToken === "" || refreshToken === "") {
+      response.cookies.delete("accessToken");
+      response.cookies.delete("refreshToken");
+    }
+    
+    return response;
   }
 
   return NextResponse.next();

@@ -23,8 +23,9 @@ export default async function DashboardPage() {
   // Middleware already handles auth, but we still need user for display
   const tokenUser = await getCurrentUser();
   if (!tokenUser) {
-    // This shouldn't happen if middleware works correctly
-    return null;
+    // If no valid user, redirect to login (cookies may be invalid/expired)
+    // This handles cases where middleware passed but tokens are invalid
+    redirect("/auth/login");
   }
 
   // Fetch full user data from database to get the name and check profile setup
@@ -33,7 +34,8 @@ export default async function DashboardPage() {
     await connectDB();
     const dbUser = await User.findById(tokenUser.userId).select("name email timeCategories profileSetupCompleted");
     if (!dbUser) {
-      return null;
+      // User not found in database - invalid token, redirect to login
+      redirect("/auth/login");
     }
 
     // Check if profile setup is completed
