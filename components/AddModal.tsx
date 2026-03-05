@@ -18,9 +18,11 @@ interface AddModalProps {
   onHabitCreated?: () => void;
   onIdeaCreated?: () => void;
   habitToEdit?: any | null;
+  defaultCategory?: string;
+  defaultDate?: Date;
 }
 
-export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabitCreated, onIdeaCreated, habitToEdit }: AddModalProps) {
+export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabitCreated, onIdeaCreated, habitToEdit, defaultCategory, defaultDate }: AddModalProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"idea" | "habit" | "note">(defaultTab);
   const [loading, setLoading] = useState(false);
@@ -32,12 +34,14 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
   const [selectedParentId, setSelectedParentId] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [timeAllocation, setTimeAllocation] = useState<any>(null);
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [startTime, setStartTime] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("");
   const [timelineType, setTimelineType] = useState<"preset" | "custom">("preset");
   const [customMonths, setCustomMonths] = useState<number>(0);
   const [customDays, setCustomDays] = useState<number>(0);
   const [timeValidationError, setTimeValidationError] = useState<string>("");
+  const [priority, setPriority] = useState<string>("low");
   const [frequency, setFrequency] = useState<string>("daily");
   const [dayOfWeek, setDayOfWeek] = useState<number>(1); // Monday by default
   const [dayOfMonth, setDayOfMonth] = useState<number>(1);
@@ -56,6 +60,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
         setSelectedCategory(habitToEdit.category || "");
         setStartTime(habitToEdit.startTime || "");
         setEndTime(habitToEdit.endTime || "");
+        setPriority(habitToEdit.priority || "low");
         setFrequency(habitToEdit.frequency || "daily");
         setDayOfWeek(habitToEdit.dayOfWeek !== undefined ? habitToEdit.dayOfWeek : 1);
         setDayOfMonth(habitToEdit.dayOfMonth !== undefined ? habitToEdit.dayOfMonth : 1);
@@ -78,12 +83,17 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
           setCustomMonths(0);
           setCustomDays(0);
         }
+      } else if (defaultCategory) {
+        // Pre-fill category if provided
+        setSelectedCategory(defaultCategory);
+        setActiveTab("habit");
       }
     } else {
       // Reset form state when modal closes
       setSelectedHabitId("");
       setSelectedParentId("");
       setSelectedCategory("");
+      setSelectedSlotIndex(null);
       setStartTime("");
       setEndTime("");
       setFrequency("daily");
@@ -96,7 +106,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
       setLoading(false);
       setError("");
     }
-  }, [defaultTab, isOpen, habitToEdit]);
+  }, [defaultTab, isOpen, habitToEdit, defaultCategory]);
 
   async function loadData() {
     const [topicsResult, habitsResult, profileResult, ideasResult] = await Promise.all([
@@ -207,7 +217,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
   }
 
   // TIME_LIMITS removed - duration validation is handled in profile setup
-  // Only range and overlap checks are needed here
+  // Only range check is needed here (overlap validation removed - multiple habits allowed in same block)
 
   // Format time for display (HH:MM to 12-hour format)
   function formatTimeForDisplay(time: string): string {
@@ -228,57 +238,64 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     journal: "journaling", // Map "journal" to "journaling" time allocation
   };
 
+  // Get all ranges for a given category from time allocation (supports legacy single range)
+  function getCategoryRanges(category: string | null, allocation?: any) {
+    const source = allocation || timeAllocation;
+    if (!category || !source) return [];
+    const timeKey = categoryToTimeKey[category];
+    if (!timeKey || !source[timeKey]) return [];
+    const cat = source[timeKey];
+    if (Array.isArray(cat.ranges) && cat.ranges.length > 0) return cat.ranges;
+    if (cat.startTime && cat.endTime) {
+      return [{ startTime: cat.startTime, endTime: cat.endTime }];
+    }
+    return [];
+  }
+
+  // Apply category time from allocation without changing selectedCategory
+  function applyCategoryTime(category: string, allocation?: any) {
+    const ranges = getCategoryRanges(category, allocation);
+    if (!ranges.length) {
+      setStartTime("");
+      setEndTime("");
+      return;
+    }
+
+    // Default to the first slot for this category
+    const index = 0;
+    const slot = ranges[index];
+    setSelectedSlotIndex(index);
+    setStartTime(slot.startTime || "");
+    setEndTime(slot.endTime || "");
+
+    // Validate the auto-selected slot
+    if (slot.startTime && slot.endTime && category) {
+      validateTimeSlot(slot.startTime, slot.endTime, category);
+    }
+  }
+
   // Handle category change - auto-fill times with allocated range
   function handleCategoryChange(category: string) {
     setSelectedCategory(category);
+    setSelectedSlotIndex(null);
     setTimeValidationError("");
-    
-    if (category && timeAllocation) {
-      const timeKey = categoryToTimeKey[category];
-      console.log("[AddModal] Category selected:", category, "Mapping to:", timeKey);
-      console.log("[AddModal] Available time allocation keys:", Object.keys(timeAllocation));
-      
-      if (timeKey && timeAllocation[timeKey]) {
-        const timeSlot = timeAllocation[timeKey];
-        console.log("[AddModal] Time slot found:", timeSlot);
-        
-        if (timeSlot.startTime && timeSlot.endTime) {
-          // Set the start time to the allocated start time
-          // User can edit it, but it must stay within the allocated range
-          setStartTime(timeSlot.startTime);
-          // Set end time to start time + 30 minutes (default duration)
-          // This gives a reasonable default that user can adjust
-          const defaultEndMinutes = timeToMinutes(timeSlot.startTime) + 30;
-          const defaultEnd = minutesToTime(defaultEndMinutes);
-          // Make sure default end doesn't exceed allocated end time
-          const allocatedEndMinutes = timeToMinutes(timeSlot.endTime);
-          if (defaultEndMinutes <= allocatedEndMinutes || (allocatedEndMinutes < timeToMinutes(timeSlot.startTime) && defaultEndMinutes <= 24 * 60)) {
-            setEndTime(defaultEnd);
-          } else {
-            // If default exceeds, set to allocated end time
-            setEndTime(timeSlot.endTime);
-          }
-          console.log("[AddModal] Auto-filling times:", timeSlot.startTime, "-", timeSlot.endTime);
-          // Validate after setting times
-          setTimeout(() => {
-            validateTimeSlot(timeSlot.startTime, defaultEndMinutes <= allocatedEndMinutes ? defaultEnd : timeSlot.endTime, category);
-          }, 100);
-        } else {
-          console.warn("[AddModal] Time slot missing startTime or endTime:", timeSlot);
-          setStartTime("");
-          setEndTime("");
-        }
-      } else {
-        console.warn("[AddModal] No time allocation found for key:", timeKey, "Available:", Object.keys(timeAllocation));
-        setStartTime("");
-        setEndTime("");
-      }
-    } else {
-      console.warn("[AddModal] No category or timeAllocation:", { category, hasTimeAllocation: !!timeAllocation });
+
+    if (!category) {
       setStartTime("");
       setEndTime("");
+      return;
     }
+
+    applyCategoryTime(category);
   }
+
+  // When time allocation loads/changes, re-apply times for currently selected category
+  useEffect(() => {
+    if (selectedCategory && timeAllocation) {
+      applyCategoryTime(selectedCategory, timeAllocation);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeAllocation]);
 
   // Helper to convert minutes to time string
   function minutesToTime(minutes: number): string {
@@ -289,15 +306,13 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
 
   // Get allocated time range for selected category
   function getAllocatedTimeRange() {
-    if (!selectedCategory || !timeAllocation) return null;
-    const timeKey = categoryToTimeKey[selectedCategory];
-    if (timeKey && timeAllocation[timeKey]) {
-      return {
-        start: timeAllocation[timeKey].startTime,
-        end: timeAllocation[timeKey].endTime,
-      };
-    }
-    return null;
+    if (!selectedCategory) return null;
+    const ranges = getCategoryRanges(selectedCategory);
+    if (!ranges.length) return null;
+    const idx = selectedSlotIndex != null ? selectedSlotIndex : 0;
+    const slot = ranges[idx];
+    if (!slot || !slot.startTime || !slot.endTime) return null;
+    return { start: slot.startTime, end: slot.endTime };
   }
 
   // Map habit category to profile time allocation category
@@ -333,8 +348,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
   // Validate time slot
   // Only validates:
   // 1. Time is within the allocated range from profile setup
-  // 2. No overlaps with existing habits
-  // Duration min/max checks are NOT needed - already validated in profile setup
+  // Overlap validation is REMOVED - multiple habits can exist in the same time block
   function validateTimeSlot(checkStartTime?: string, checkEndTime?: string, checkCategory?: string) {
     const checkStart = checkStartTime ?? startTime;
     const checkEnd = checkEndTime ?? endTime;
@@ -348,71 +362,42 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     // Clear previous errors
     setTimeValidationError("");
 
-    // FIRST: Check if habit time slot is within category's allocated time range
-    // This is CRITICAL - the time MUST be within the profile range
+    // Check if habit time slot is within category's allocated time range
+    // This is CRITICAL - the time MUST be within ONE of the profile ranges
     if (timeAllocation) {
       const timeAllocationKey = mapCategoryToTimeAllocation(checkCat);
       if (timeAllocationKey && timeAllocation[timeAllocationKey]) {
         const timeCategory = timeAllocation[timeAllocationKey];
-        if (timeCategory.startTime && timeCategory.endTime) {
-          if (!isTimeRangeWithin(checkStart, checkEnd, timeCategory.startTime, timeCategory.endTime)) {
-            setTimeValidationError(
-              `❌ Time slot (${formatTimeForDisplay(checkStart)} - ${formatTimeForDisplay(checkEnd)}) is outside the allocated ${getCategoryDisplayName(checkCat)} Time range (${formatTimeForDisplay(timeCategory.startTime)} - ${formatTimeForDisplay(timeCategory.endTime)}). Please choose a time within this range.`
-            );
-            return false;
-          }
+        const ranges = getCategoryRanges(checkCat, timeAllocation);
+        
+        if (ranges.length === 0) {
+          setTimeValidationError(
+            `❌ No time allocation found for ${getCategoryDisplayName(checkCat)}. Please set up time allocation in your profile first.`
+          );
+          return false;
+        }
+        
+        // Check if the habit time is within ANY of the allocated ranges
+        const isWithinAnyRange = ranges.some((range: any) => {
+          if (!range.startTime || !range.endTime) return false;
+          return isTimeRangeWithin(checkStart, checkEnd, range.startTime, range.endTime);
+        });
+        
+        if (!isWithinAnyRange) {
+          const rangesText = ranges.map((r: any) => 
+            `${formatTimeForDisplay(r.startTime)} - ${formatTimeForDisplay(r.endTime)}`
+          ).join(", ");
+          setTimeValidationError(
+            `❌ Time slot (${formatTimeForDisplay(checkStart)} - ${formatTimeForDisplay(checkEnd)}) is outside the allocated ${getCategoryDisplayName(checkCat)} Time range(s): ${rangesText}. Please choose a time within one of these ranges.`
+          );
+          return false;
         }
       }
     }
 
-    // SECOND: Check for overlaps with existing habits in the same category
-    // This is CRITICAL - no overlapping habits allowed
-    const overlappingHabit = habits.find((habit: any) => {
-      if (!habit.startTime || !habit.endTime || !habit.category) return false;
-      // Check if same category or related categories
-      const habitCategory = habit.category;
-      const isSameCategory = habitCategory === checkCat || 
-        (checkCat === "work" && habitCategory === "workBlock") ||
-        (checkCat === "workBlock" && habitCategory === "work") ||
-        (checkCat === "personal" && habitCategory === "personal") ||
-        (checkCat === "productive" && habitCategory === "productive") ||
-        (checkCat === "familyTime" && habitCategory === "familyTime") ||
-        (checkCat === "journal" && habitCategory === "journal");
-      if (!isSameCategory) return false;
-      // Check for any overlap
-      return timeRangesOverlap(checkStart, checkEnd, habit.startTime, habit.endTime);
-    });
-
-    if (overlappingHabit) {
-      setTimeValidationError(
-        `❌ Time slot overlaps with existing habit "${overlappingHabit.name}" (${formatTimeForDisplay(overlappingHabit.startTime)} - ${formatTimeForDisplay(overlappingHabit.endTime)}). Please choose a different time slot.`
-      );
-      return false;
-    }
-
     // All validations passed
+    // NOTE: Overlap validation removed - multiple habits can exist in the same time block
     return true;
-  }
-
-  // Handle time change
-  function handleTimeChange(type: "start" | "end", value: string) {
-    const newStartTime = type === "start" ? value : startTime;
-    const newEndTime = type === "end" ? value : endTime;
-    
-    if (type === "start") {
-      setStartTime(value);
-    } else {
-      setEndTime(value);
-    }
-    
-    // Validate after a short delay to avoid too many validations
-    setTimeout(() => {
-      if (newStartTime && newEndTime && selectedCategory) {
-        validateTimeSlot(newStartTime, newEndTime, selectedCategory);
-      } else {
-        setTimeValidationError("");
-      }
-    }, 300);
   }
 
   if (!isOpen) return null;
@@ -462,7 +447,7 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
     setLoading(true);
 
     // Validate time slot if times are provided
-    // Only validates: time within allocated range and no overlaps
+    // Only validates: time within allocated range (overlap validation removed)
     if (startTime && endTime && selectedCategory) {
       if (!validateTimeSlot(startTime, endTime, selectedCategory)) {
         // Don't set top error - timeValidationError is already displayed below the time fields
@@ -764,15 +749,13 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                     type="time"
                     name="startTime"
                     value={startTime}
-                    onChange={(e) => handleTimeChange("start", e.target.value)}
                     required={!!selectedCategory}
-                    min={getAllocatedTimeRange()?.start}
-                    max={getAllocatedTimeRange()?.end}
-                    className="input-premium w-full text-contrast-high focus-visible-premium"
+                    readOnly
+                    className="input-premium w-full text-contrast-high focus-visible-premium bg-slate-50 dark:bg-slate-800"
                   />
-                  {selectedCategory && getAllocatedTimeRange() && (
+                  {selectedCategory && (
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Min: {formatTimeForDisplay(getAllocatedTimeRange()!.start)}
+                      Auto-filled from category time block
                     </p>
                   )}
                 </div>
@@ -784,19 +767,55 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                     type="time"
                     name="endTime"
                     value={endTime}
-                    onChange={(e) => handleTimeChange("end", e.target.value)}
                     required={!!selectedCategory}
-                    min={startTime || getAllocatedTimeRange()?.start}
-                    max={getAllocatedTimeRange()?.end}
-                    className="input-premium w-full text-contrast-high focus-visible-premium"
+                    readOnly
+                    className="input-premium w-full text-contrast-high focus-visible-premium bg-slate-50 dark:bg-slate-800"
                   />
-                  {selectedCategory && getAllocatedTimeRange() && (
+                  {selectedCategory && (
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Max: {formatTimeForDisplay(getAllocatedTimeRange()!.end)}
+                      Auto-filled from category time block
                     </p>
                   )}
                 </div>
               </div>
+              {/* Time slot selector when category has multiple slots */}
+              {selectedCategory && timeAllocation && (() => {
+                const ranges = getCategoryRanges(selectedCategory);
+                if (ranges.length <= 1) return null;
+                const currentIndex = selectedSlotIndex != null ? selectedSlotIndex : 0;
+                return (
+                  <div className="mb-2">
+                    <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
+                      Time Slot
+                    </label>
+                    <select
+                      value={currentIndex}
+                      onChange={(e) => {
+                        const idx = Number(e.target.value);
+                        setSelectedSlotIndex(idx);
+                        const slot = ranges[idx];
+                        if (slot) {
+                          setStartTime(slot.startTime || "");
+                          setEndTime(slot.endTime || "");
+                          if (slot.startTime && slot.endTime && selectedCategory) {
+                            validateTimeSlot(slot.startTime, slot.endTime, selectedCategory);
+                          }
+                        }
+                      }}
+                      className="input-premium w-full text-contrast-high focus-visible-premium"
+                    >
+                      {ranges.map((slot: any, idx: number) => (
+                        <option key={idx} value={idx}>
+                          {`Slot ${idx + 1}: ${formatTimeForDisplay(slot.startTime)} - ${formatTimeForDisplay(slot.endTime)}`}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Choose which predefined time slot this habit should use.
+                    </p>
+                  </div>
+                );
+              })()}
               {startTime && endTime && (
                 <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                   Duration: {Math.floor(calculateDuration(startTime, endTime) / 60)}h {calculateDuration(startTime, endTime) % 60}min
@@ -809,8 +828,17 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
               )}
               {selectedCategory && timeAllocation && (() => {
                 const timeKey = categoryToTimeKey[selectedCategory];
-                if (timeKey && timeAllocation[timeKey] && timeAllocation[timeKey].startTime && timeAllocation[timeKey].endTime) {
-                  const timeSlot = timeAllocation[timeKey];
+                const timeCategory = timeKey ? timeAllocation[timeKey] : null;
+                const ranges = timeCategory?.ranges || (timeCategory?.startTime && timeCategory?.endTime
+                  ? [{ startTime: timeCategory.startTime, endTime: timeCategory.endTime }]
+                  : []);
+
+                if (!ranges.length) return null;
+
+                const slotIdx = selectedSlotIndex != null ? selectedSlotIndex : 0;
+                const timeSlot = ranges[slotIdx];
+
+                if (timeSlot && timeSlot.startTime && timeSlot.endTime) {
                   // Get existing habits in this category
                   const existingHabitsInCategory = habits.filter((habit: any) => {
                     if (!habit.category) return false;
@@ -823,21 +851,24 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   return (
                     <div className="space-y-2 sm:space-y-3">
                       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg sm:rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm text-blue-800 dark:text-blue-300">
-                        <p className="font-semibold mb-1">ℹ️ Allocated Time Range:</p>
+                        <p className="font-semibold mb-1">ℹ️ Category Time Block:</p>
                         <p className="break-words">
                           Your {getCategoryDisplayName(selectedCategory)} Time is set to{" "}
                           <span className="font-semibold">
                             {formatTimeForDisplay(timeSlot.startTime)} - {formatTimeForDisplay(timeSlot.endTime)}
                           </span>
-                          . You can choose any time within this range.
+                          . This time range is automatically applied to your habit.
+                        </p>
+                        <p className="mt-2 text-xs">
+                          💡 Multiple habits can be created within this time block. You just need to complete them within this time range.
                         </p>
                       </div>
                       {existingHabitsInCategory.length > 0 && (
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg sm:rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm">
-                          <p className="font-semibold mb-2 text-amber-800 dark:text-amber-300">📋 Existing Habits in {getCategoryDisplayName(selectedCategory)}:</p>
+                        <div className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg sm:rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm">
+                          <p className="font-semibold mb-2 text-slate-700 dark:text-slate-300">📋 Existing Habits in {getCategoryDisplayName(selectedCategory)} (for reference):</p>
                           <div className="space-y-1">
                             {existingHabitsInCategory.map((habit: any) => (
-                              <div key={habit._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs text-amber-700 dark:text-amber-400">
+                              <div key={habit._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs text-slate-600 dark:text-slate-400">
                                 <span className="font-medium break-words">{habit.name}</span>
                                 {habit.startTime && habit.endTime && (
                                   <span className="whitespace-nowrap">
@@ -847,9 +878,6 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                               </div>
                             ))}
                           </div>
-                          <p className="text-xs text-amber-600 dark:text-amber-500 mt-2 italic">
-                            ⚠️ Make sure your new habit time doesn't overlap with these existing habits.
-                          </p>
                         </div>
                       )}
                     </div>
@@ -946,13 +974,20 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
                   </label>
                   <select
                     name="priority"
-                    defaultValue={habitToEdit?.priority || "medium"}
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
                     className="input-premium w-full text-contrast-high focus-visible-premium"
                   >
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="low">Low</option>
+                    <option value="low">Low Priority</option>
+                    <option value="high">High Priority</option>
                   </select>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {priority === "high" ? (
+                      <>High Priority: If not completed, will be added to Pending Tasks</>
+                    ) : (
+                      <>Low Priority: Can be skipped and edited later from Calendar</>
+                    )}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">

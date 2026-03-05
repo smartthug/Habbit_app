@@ -13,33 +13,28 @@ export interface IUser extends Document {
   profileSetupCompleted?: boolean;
   timeCategories?: {
     personalWork?: {
-      startTime: string;
-      endTime: string;
-      totalHours: number;
-      minAllocation: number;
+      ranges: { startTime: string; endTime: string }[];
+      totalHours?: number;
+      minAllocation?: number;
     };
     workBlock?: {
-      startTime: string;
-      endTime: string;
-      totalHours: number;
-      minAllocation: number;
+      ranges: { startTime: string; endTime: string }[];
+      totalHours?: number;
+      minAllocation?: number;
     };
     productive?: {
-      startTime: string;
-      endTime: string;
-      totalHours: number;
-      minAllocation: number;
+      ranges: { startTime: string; endTime: string }[];
+      totalHours?: number;
+      minAllocation?: number;
     };
     familyTime?: {
-      startTime: string;
-      endTime: string;
-      totalHours: number;
-      minAllocation: number;
+      ranges: { startTime: string; endTime: string }[];
+      totalHours?: number;
+      minAllocation?: number;
     };
     journaling?: {
-      startTime: string;
-      endTime: string;
-      totalHours: number;
+      ranges: { startTime: string; endTime: string }[];
+      totalHours?: number;
     };
   };
   createdAt: Date;
@@ -93,32 +88,52 @@ const UserSchema: Schema = new Schema(
     },
     timeCategories: {
       personalWork: {
-        startTime: { type: String },
-        endTime: { type: String },
+        ranges: [
+          {
+            startTime: { type: String },
+            endTime: { type: String },
+          },
+        ],
         totalHours: { type: Number, default: 2.5 },
         minAllocation: { type: Number, default: 50 },
       },
       workBlock: {
-        startTime: { type: String },
-        endTime: { type: String },
+        ranges: [
+          {
+            startTime: { type: String },
+            endTime: { type: String },
+          },
+        ],
         totalHours: { type: Number, default: 4 },
         minAllocation: { type: Number, default: 50 },
       },
       productive: {
-        startTime: { type: String },
-        endTime: { type: String },
+        ranges: [
+          {
+            startTime: { type: String },
+            endTime: { type: String },
+          },
+        ],
         totalHours: { type: Number, default: 3.5 },
         minAllocation: { type: Number, default: 50 },
       },
       familyTime: {
-        startTime: { type: String },
-        endTime: { type: String },
+        ranges: [
+          {
+            startTime: { type: String },
+            endTime: { type: String },
+          },
+        ],
         totalHours: { type: Number, default: 2 },
         minAllocation: { type: Number, default: 50 },
       },
       journaling: {
-        startTime: { type: String },
-        endTime: { type: String },
+        ranges: [
+          {
+            startTime: { type: String },
+            endTime: { type: String },
+          },
+        ],
         totalHours: { type: Number, default: 1 },
       },
     },

@@ -21,13 +21,13 @@ const createHabitSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6).optional(),
   dayOfMonth: z.number().int().min(1).max(31).optional(),
   month: z.number().int().min(0).max(11).optional(),
-  priority: z.enum(["low", "medium", "high"]),
+  priority: z.enum(["low", "high"]),
   reminderTime: z.string().optional(),
   ideaGenerating: z.boolean().optional(),
 });
 
 // TIME_LIMITS removed - duration validation is handled in profile setup
-// Only range and overlap checks are needed here
+// Only range check is needed here (overlap validation removed - multiple habits allowed in same block)
 
 // Helper function to convert time string (HH:MM) to minutes
 function timeToMinutes(time: string): number {
@@ -255,7 +255,7 @@ export async function createHabit(formData: FormData) {
     const validatedData = createHabitSchema.parse(rawData);
 
     // Validate time slot if provided
-    // Only validates: time within allocated range and no overlaps
+    // Only validates: time within allocated range (overlap validation removed - multiple habits allowed in same block)
     // Duration min/max checks are NOT needed - already validated in profile setup
     if (validatedData.startTime && validatedData.endTime) {
       const timeAllocationKey = mapCategoryToTimeAllocation(validatedData.category);
@@ -265,47 +265,49 @@ export async function createHabit(formData: FormData) {
         if (dbUser && dbUser.timeCategories) {
           const timeCategory = (dbUser.timeCategories as any)[timeAllocationKey];
           
-          // FIRST: Check if habit time is within the allocated time range
-          if (timeCategory && timeCategory.startTime && timeCategory.endTime) {
-            if (!isTimeRangeWithin(
-              validatedData.startTime,
-              validatedData.endTime,
-              timeCategory.startTime,
-              timeCategory.endTime
-            )) {
-              return {
-                error: `${getCategoryDisplayName(validatedData.category)} habit time (${validatedData.startTime} - ${validatedData.endTime}) is outside the allocated ${getCategoryDisplayName(validatedData.category)} Time range (${timeCategory.startTime} - ${timeCategory.endTime}) in your profile.`
-              };
+          // Check if habit time is within ANY of the allocated time ranges
+          // Support both legacy single range and new multi-range format
+          let isWithinRange = false;
+          let rangesText = "";
+          
+          if (timeCategory) {
+            // Check if it's the new multi-range format
+            if (Array.isArray(timeCategory.ranges) && timeCategory.ranges.length > 0) {
+              rangesText = timeCategory.ranges.map((r: any) => 
+                `${r.startTime} - ${r.endTime}`
+              ).join(", ");
+              
+              isWithinRange = timeCategory.ranges.some((range: any) => {
+                if (!range.startTime || !range.endTime) return false;
+                return isTimeRangeWithin(
+                  validatedData.startTime!,
+                  validatedData.endTime!,
+                  range.startTime,
+                  range.endTime
+                );
+              });
+            } 
+            // Legacy single range format
+            else if (timeCategory.startTime && timeCategory.endTime) {
+              rangesText = `${timeCategory.startTime} - ${timeCategory.endTime}`;
+              isWithinRange = isTimeRangeWithin(
+                validatedData.startTime,
+                validatedData.endTime,
+                timeCategory.startTime,
+                timeCategory.endTime
+              );
             }
           }
-
-          // SECOND: Check for overlaps with existing habits in the same category
-          const existingHabits = await Habit.find({
-            userId: user.userId,
-            $or: [
-              { category: validatedData.category },
-              // Handle related categories
-              ...(validatedData.category === "work" ? [{ category: "workBlock" }] : []),
-              ...(validatedData.category === "workBlock" ? [{ category: "work" }] : []),
-            ],
-            startTime: { $exists: true, $ne: null },
-            endTime: { $exists: true, $ne: null },
-          }).select("name startTime endTime").lean();
-
-          // Check for overlaps
-          const overlappingHabit = existingHabits.find((habit: any) => {
-            if (!habit.startTime || !habit.endTime) return false;
-            return timeRangesOverlap(
-              validatedData.startTime!,
-              validatedData.endTime!,
-              habit.startTime,
-              habit.endTime
-            );
-          });
-
-          if (overlappingHabit) {
+          
+          if (!isWithinRange && rangesText) {
             return {
-              error: `Time slot overlaps with existing habit "${overlappingHabit.name}" (${overlappingHabit.startTime} - ${overlappingHabit.endTime}). Please choose a different time slot.`
+              error: `${getCategoryDisplayName(validatedData.category)} habit time (${validatedData.startTime} - ${validatedData.endTime}) is outside the allocated ${getCategoryDisplayName(validatedData.category)} Time range(s): ${rangesText} in your profile.`
+            };
+          }
+          
+          if (!isWithinRange && !rangesText) {
+            return {
+              error: `No time allocation found for ${getCategoryDisplayName(validatedData.category)}. Please set up time allocation in your profile first.`
             };
           }
         }
@@ -504,7 +506,7 @@ export async function updateHabit(habitId: string, formData: FormData) {
 
     const validatedData = createHabitSchema.parse(rawData);
 
-    // Validate time slot if provided (exclude current habit from overlap check)
+    // Validate time slot if provided (overlap validation removed - multiple habits allowed in same block)
     if (validatedData.startTime && validatedData.endTime) {
       const timeAllocationKey = mapCategoryToTimeAllocation(validatedData.category);
       if (timeAllocationKey) {
@@ -512,45 +514,49 @@ export async function updateHabit(habitId: string, formData: FormData) {
         if (dbUser && dbUser.timeCategories) {
           const timeCategory = (dbUser.timeCategories as any)[timeAllocationKey];
           
-          if (timeCategory && timeCategory.startTime && timeCategory.endTime) {
-            if (!isTimeRangeWithin(
-              validatedData.startTime,
-              validatedData.endTime,
-              timeCategory.startTime,
-              timeCategory.endTime
-            )) {
-              return {
-                error: `${getCategoryDisplayName(validatedData.category)} habit time (${validatedData.startTime} - ${validatedData.endTime}) is outside the allocated ${getCategoryDisplayName(validatedData.category)} Time range (${timeCategory.startTime} - ${timeCategory.endTime}) in your profile.`
-              };
+          // Check if habit time is within ANY of the allocated time ranges
+          // Support both legacy single range and new multi-range format
+          let isWithinRange = false;
+          let rangesText = "";
+          
+          if (timeCategory) {
+            // Check if it's the new multi-range format
+            if (Array.isArray(timeCategory.ranges) && timeCategory.ranges.length > 0) {
+              rangesText = timeCategory.ranges.map((r: any) => 
+                `${r.startTime} - ${r.endTime}`
+              ).join(", ");
+              
+              isWithinRange = timeCategory.ranges.some((range: any) => {
+                if (!range.startTime || !range.endTime) return false;
+                return isTimeRangeWithin(
+                  validatedData.startTime!,
+                  validatedData.endTime!,
+                  range.startTime,
+                  range.endTime
+                );
+              });
+            } 
+            // Legacy single range format
+            else if (timeCategory.startTime && timeCategory.endTime) {
+              rangesText = `${timeCategory.startTime} - ${timeCategory.endTime}`;
+              isWithinRange = isTimeRangeWithin(
+                validatedData.startTime,
+                validatedData.endTime,
+                timeCategory.startTime,
+                timeCategory.endTime
+              );
             }
           }
-
-          // Check for overlaps with other habits (excluding current habit)
-          const existingHabits = await Habit.find({
-            userId: user.userId,
-            _id: { $ne: habitId },
-            $or: [
-              { category: validatedData.category },
-              ...(validatedData.category === "work" ? [{ category: "workBlock" }] : []),
-              ...(validatedData.category === "workBlock" ? [{ category: "work" }] : []),
-            ],
-            startTime: { $exists: true, $ne: null },
-            endTime: { $exists: true, $ne: null },
-          }).select("name startTime endTime").lean();
-
-          const overlappingHabit = existingHabits.find((habit: any) => {
-            if (!habit.startTime || !habit.endTime) return false;
-            return timeRangesOverlap(
-              validatedData.startTime!,
-              validatedData.endTime!,
-              habit.startTime,
-              habit.endTime
-            );
-          });
-
-          if (overlappingHabit) {
+          
+          if (!isWithinRange && rangesText) {
             return {
-              error: `Time slot overlaps with existing habit "${overlappingHabit.name}" (${overlappingHabit.startTime} - ${overlappingHabit.endTime}). Please choose a different time slot.`
+              error: `${getCategoryDisplayName(validatedData.category)} habit time (${validatedData.startTime} - ${validatedData.endTime}) is outside the allocated ${getCategoryDisplayName(validatedData.category)} Time range(s): ${rangesText} in your profile.`
+            };
+          }
+          
+          if (!isWithinRange && !rangesText) {
+            return {
+              error: `No time allocation found for ${getCategoryDisplayName(validatedData.category)}. Please set up time allocation in your profile first.`
             };
           }
         }

@@ -3,18 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { saveProfileSetup, checkProfileSetup } from "@/app/actions/profile";
-import { User, Calendar, Briefcase, MapPin, Info, Clock, BookOpen, Users, Target, Zap, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
-import TimeBlockCard from "@/components/TimeBlockCard";
+import { User, Calendar, Briefcase, MapPin, Info, Clock, BookOpen, Users, Target, Zap, Sparkles, CheckCircle2, AlertCircle, Plus, Trash2 } from "lucide-react";
 import { format } from "date-fns";
-
-// Time limits in minutes
-const TIME_LIMITS = {
-  personalWork: { min: 75, max: 150 }, // 1h15min - 2h30min
-  workBlock: { min: 120, max: 240 }, // 2h - 4h
-  productive: { min: 105, max: 210 }, // 1h45min - 3h30min
-  familyTime: { min: 60, max: 120 }, // 1h - 2h
-  journal: { min: 30, max: 60 }, // 30min - 1h
-};
 
 // Helper function to convert time string (HH:MM) to minutes
 function timeToMinutes(time: string): number {
@@ -92,21 +82,19 @@ export default function ProfileSetupPage() {
     dateOfBirth: "",
     profession: "",
     pinCode: "",
-    // Personal Work
-    personalWorkStart: "",
-    personalWorkEnd: "",
-    // Work Block
-    workBlockStart: "",
-    workBlockEnd: "",
-    // Productive
-    productiveStart: "",
-    productiveEnd: "",
-    // Family Time
-    familyTimeStart: "",
-    familyTimeEnd: "",
-    // Journal
-    journalStart: "",
-    journalEnd: "",
+  });
+  const [timeRanges, setTimeRanges] = useState<{
+    personalWork: { startTime: string; endTime: string }[];
+    workBlock: { startTime: string; endTime: string }[];
+    productive: { startTime: string; endTime: string }[];
+    familyTime: { startTime: string; endTime: string }[];
+    journal: { startTime: string; endTime: string }[];
+  }>({
+    personalWork: [{ startTime: "", endTime: "" }],
+    workBlock: [{ startTime: "", endTime: "" }],
+    productive: [{ startTime: "", endTime: "" }],
+    familyTime: [{ startTime: "", endTime: "" }],
+    journal: [{ startTime: "", endTime: "" }],
   });
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
@@ -137,7 +125,7 @@ export default function ProfileSetupPage() {
       [name]: value,
     }));
     
-    // Clear validation error for this field
+    // Clear validation error for this field (if any personal-info related)
     if (validationErrors[name]) {
       setValidationErrors((prev) => {
         const newErrors = { ...prev };
@@ -145,105 +133,80 @@ export default function ProfileSetupPage() {
         return newErrors;
       });
     }
-    
-    // Validate on change
-    validateTimeAllocation();
   }
 
-  function validateTimeAllocation(): Record<string, string> {
+  function validateTimeAllocation(rangesToValidate?: typeof timeRanges): Record<string, string> {
     const errors: Record<string, string> = {};
-    const timeBlocks: Array<{
-      key: string;
-      name: string;
-      start: string;
-      end: string;
-      limits: { min: number; max: number };
-    }> = [
-      {
-        key: "personalWork",
-        name: "Personal Work",
-        start: formData.personalWorkStart,
-        end: formData.personalWorkEnd,
-        limits: TIME_LIMITS.personalWork,
-      },
-      {
-        key: "workBlock",
-        name: "Work Block",
-        start: formData.workBlockStart,
-        end: formData.workBlockEnd,
-        limits: TIME_LIMITS.workBlock,
-      },
-      {
-        key: "productive",
-        name: "Productive",
-        start: formData.productiveStart,
-        end: formData.productiveEnd,
-        limits: TIME_LIMITS.productive,
-      },
-      {
-        key: "familyTime",
-        name: "Family Time",
-        start: formData.familyTimeStart,
-        end: formData.familyTimeEnd,
-        limits: TIME_LIMITS.familyTime,
-      },
-      {
-        key: "journal",
-        name: "Journal",
-        start: formData.journalStart,
-        end: formData.journalEnd,
-        limits: TIME_LIMITS.journal,
-      },
+    const rangesToCheck = rangesToValidate || timeRanges;
+    const categories: { key: keyof typeof timeRanges; name: string }[] = [
+      { key: "personalWork", name: "Personal" },
+      { key: "workBlock", name: "Work" },
+      { key: "productive", name: "Productivity" },
+      { key: "familyTime", name: "Family" },
+      { key: "journal", name: "Journal" },
     ];
 
-    // Validate each time block
-    timeBlocks.forEach((block) => {
-      if (!block.start || !block.end) {
-        errors[`${block.key}Start`] = `${block.name} start time is required`;
-        errors[`${block.key}End`] = `${block.name} end time is required`;
-        return;
-      }
+    let totalMinutes = 0;
+    const allValidRanges: Array<{ category: string; categoryName: string; range: { startTime: string; endTime: string }; index: number }> = [];
 
-      const duration = calculateDuration(block.start, block.end);
-      const minHours = Math.floor(block.limits.min / 60);
-      const minMins = block.limits.min % 60;
-      const maxHours = Math.floor(block.limits.max / 60);
-      const maxMins = block.limits.max % 60;
-      const currentHours = Math.floor(duration / 60);
-      const currentMins = duration % 60;
+    // First pass: collect all valid ranges and check within-category overlaps
+    categories.forEach((category) => {
+      const ranges = rangesToCheck[category.key] || [];
+      const validRanges = ranges.filter((r) => r.startTime && r.endTime);
+      
+      // Only show error if this category has NO valid ranges
+      if (validRanges.length === 0) {
+        errors[`${category.key}Empty`] = `${category.name} must have at least one time slot`;
+      } else {
+        // Category has valid ranges, so calculate total and check for overlaps
+        validRanges.forEach((range, idx) => {
+          totalMinutes += calculateDuration(range.startTime, range.endTime);
+          allValidRanges.push({
+            category: category.key,
+            categoryName: category.name,
+            range,
+            index: ranges.findIndex((r) => r === range),
+          });
+        });
 
-      // Validate minimum time limit
-      if (duration < block.limits.min) {
-        errors[`${block.key}Duration`] = `${block.name} duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min. Please increase the duration.`;
-      } 
-      // Validate maximum time limit
-      else if (duration > block.limits.max) {
-        errors[`${block.key}Duration`] = `${block.name} duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min. Please decrease the duration.`;
+        // Prevent overlaps within the same category (only check valid ranges)
+        for (let i = 0; i < validRanges.length; i++) {
+          for (let j = i + 1; j < validRanges.length; j++) {
+            const r1 = validRanges[i];
+            const r2 = validRanges[j];
+            if (timeRangesOverlap(r1.startTime, r1.endTime, r2.startTime, r2.endTime)) {
+              // Find the original indices in the full ranges array
+              const origIndex1 = ranges.findIndex((r) => r === r1);
+              const origIndex2 = ranges.findIndex((r) => r === r2);
+              errors[`${category.key}Overlap`] = `${category.name} slots ${origIndex1 + 1} and ${origIndex2 + 1} overlap`;
+              break; // Only show one overlap error per category
+            }
+          }
+        }
       }
     });
 
-    // Check for overlaps
-    for (let i = 0; i < timeBlocks.length; i++) {
-      for (let j = i + 1; j < timeBlocks.length; j++) {
-        const block1 = timeBlocks[i];
-        const block2 = timeBlocks[j];
+    // Second pass: check for overlaps across different categories
+    for (let i = 0; i < allValidRanges.length; i++) {
+      for (let j = i + 1; j < allValidRanges.length; j++) {
+        const r1 = allValidRanges[i];
+        const r2 = allValidRanges[j];
         
-        if (block1.start && block1.end && block2.start && block2.end) {
-          if (timeRangesOverlap(block1.start, block1.end, block2.start, block2.end)) {
-            errors[`${block1.key}Overlap`] = `${block1.name} overlaps with ${block2.name}`;
-            errors[`${block2.key}Overlap`] = `${block2.name} overlaps with ${block1.name}`;
+        // Only check if they're from different categories
+        if (r1.category !== r2.category) {
+          if (timeRangesOverlap(r1.range.startTime, r1.range.endTime, r2.range.startTime, r2.range.endTime)) {
+            // Create a cross-category overlap error
+            const errorKey = `crossOverlap_${r1.category}_${r2.category}`;
+            if (!errors[errorKey]) {
+              errors[errorKey] = `${r1.categoryName} slot ${r1.index + 1} overlaps with ${r2.categoryName} slot ${r2.index + 1}`;
+            }
+            // Also mark both categories as having cross-overlaps
+            errors[`${r1.category}CrossOverlap`] = `${r1.categoryName} has overlapping time slots with other categories`;
+            errors[`${r2.category}CrossOverlap`] = `${r2.categoryName} has overlapping time slots with other categories`;
           }
         }
       }
     }
-
-    // Check total time doesn't exceed 24 hours
-    const totalMinutes = timeBlocks.reduce((sum, block) => {
-      if (block.start && block.end) {
-        return sum + calculateDuration(block.start, block.end);
-      }
-      return sum;
-    }, 0);
 
     if (totalMinutes > 24 * 60) {
       errors.totalTime = `Total allocated time (${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}min) exceeds 24 hours`;
@@ -274,15 +237,34 @@ export default function ProfileSetupPage() {
     setError("");
     setLoading(true);
 
-    // Validate time allocation
+    // Clear previous validation errors first
+    setValidationErrors({});
+
+    // Validate time allocation - only show errors for invalid fields
     const errors = validateTimeAllocation();
     if (Object.keys(errors).length > 0) {
-      setError("Please fix the validation errors before submitting.");
+      // Only show generic error if there are actual validation issues
+      // Individual field errors will be shown in their respective sections
       setLoading(false);
       return;
     }
 
     const data = new FormData(e.currentTarget);
+
+    // Attach full time ranges payload
+    data.set(
+      "timeRanges",
+      JSON.stringify({
+        personalWork: timeRanges.personalWork,
+        workBlock: timeRanges.workBlock,
+        productive: timeRanges.productive,
+        familyTime: timeRanges.familyTime,
+        // Use `journal` to match server-side setup validation,
+        // and also send `journaling` for consistency with the stored schema.
+        journal: timeRanges.journal,
+        journaling: timeRanges.journal,
+      })
+    );
     const result = await saveProfileSetup(data);
 
     if (result.error) {
@@ -457,7 +439,7 @@ export default function ProfileSetupPage() {
                   Daily Time Allocation
                 </h2>
                 <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
-                  Set your preferred time blocks for different activities. Each category has minimum and maximum duration limits.
+                  Set your preferred time blocks for different activities. You can create multiple time slots for each category.
                 </p>
               </div>
 
@@ -467,251 +449,96 @@ export default function ProfileSetupPage() {
                   <p className="text-red-600 dark:text-red-400 text-sm">{validationErrors.totalTime}</p>
                 </div>
               )}
+              {/* Show cross-category overlap errors */}
+              {Object.keys(validationErrors)
+                .filter((key) => key.startsWith("crossOverlap_"))
+                .map((key) => (
+                  <div key={key} className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-600 dark:text-red-400 text-sm">{validationErrors[key]}</p>
+                  </div>
+                ))}
 
               <div className="space-y-6 sm:space-y-8">
-                {/* Personal Work */}
-                <TimeBlockCard
+                {/* Helper to render a category block with multiple slots */}
+                {/* Personal */}
+                <CategoryTimeSlots
                   id="personalWork"
-                  title="Personal Work"
+                  label="Personal"
                   icon={<Target className="w-5 h-5" />}
-                  color={{
-                    bg: "bg-blue-50",
-                    bgDark: "dark:bg-blue-900/20",
-                    border: "border-blue-200",
-                    borderDark: "dark:border-blue-800",
-                    text: "text-blue-700",
-                    textDark: "dark:text-blue-300",
-                    icon: "text-blue-600",
-                    iconDark: "dark:text-blue-400",
+                  color="indigo"
+                  ranges={timeRanges.personalWork}
+                  validationErrors={validationErrors}
+                  onChange={(ranges) => {
+                    const updated = { ...timeRanges, personalWork: ranges };
+                    setTimeRanges(updated);
+                    // Validate in real-time
+                    validateTimeAllocation(updated);
                   }}
-                  startTime={formData.personalWorkStart}
-                  endTime={formData.personalWorkEnd}
-                  minDuration={TIME_LIMITS.personalWork.min}
-                  maxDuration={TIME_LIMITS.personalWork.max}
-                  onStartTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, personalWorkStart: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.personalWorkStart;
-                      delete newErrors.personalWorkDuration;
-                      delete newErrors.personalWorkOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  onEndTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, personalWorkEnd: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.personalWorkEnd;
-                      delete newErrors.personalWorkDuration;
-                      delete newErrors.personalWorkOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  error={
-                    validationErrors.personalWorkDuration ||
-                    validationErrors.personalWorkOverlap ||
-                    undefined
-                  }
-                  isEditing={true}
                 />
 
-                {/* Work Block */}
-                <TimeBlockCard
+                {/* Work */}
+                <CategoryTimeSlots
                   id="workBlock"
-                  title="Work Block"
+                  label="Work"
                   icon={<Briefcase className="w-5 h-5" />}
-                  color={{
-                    bg: "bg-purple-50",
-                    bgDark: "dark:bg-purple-900/20",
-                    border: "border-purple-200",
-                    borderDark: "dark:border-purple-800",
-                    text: "text-purple-700",
-                    textDark: "dark:text-purple-300",
-                    icon: "text-purple-600",
-                    iconDark: "dark:text-purple-400",
+                  color="purple"
+                  ranges={timeRanges.workBlock}
+                  validationErrors={validationErrors}
+                  onChange={(ranges) => {
+                    const updated = { ...timeRanges, workBlock: ranges };
+                    setTimeRanges(updated);
+                    // Validate in real-time
+                    validateTimeAllocation(updated);
                   }}
-                  startTime={formData.workBlockStart}
-                  endTime={formData.workBlockEnd}
-                  minDuration={TIME_LIMITS.workBlock.min}
-                  maxDuration={TIME_LIMITS.workBlock.max}
-                  onStartTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, workBlockStart: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.workBlockStart;
-                      delete newErrors.workBlockDuration;
-                      delete newErrors.workBlockOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  onEndTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, workBlockEnd: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.workBlockEnd;
-                      delete newErrors.workBlockDuration;
-                      delete newErrors.workBlockOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  error={
-                    validationErrors.workBlockDuration ||
-                    validationErrors.workBlockOverlap ||
-                    undefined
-                  }
-                  isEditing={true}
                 />
 
-                {/* Productive */}
-                <TimeBlockCard
+                {/* Productivity */}
+                <CategoryTimeSlots
                   id="productive"
-                  title="Productive"
+                  label="Productivity"
                   icon={<Zap className="w-5 h-5" />}
-                  color={{
-                    bg: "bg-teal-50",
-                    bgDark: "dark:bg-teal-900/20",
-                    border: "border-teal-200",
-                    borderDark: "dark:border-teal-800",
-                    text: "text-teal-700",
-                    textDark: "dark:text-teal-300",
-                    icon: "text-teal-600",
-                    iconDark: "dark:text-teal-400",
+                  color="teal"
+                  ranges={timeRanges.productive}
+                  validationErrors={validationErrors}
+                  onChange={(ranges) => {
+                    const updated = { ...timeRanges, productive: ranges };
+                    setTimeRanges(updated);
+                    // Validate in real-time
+                    validateTimeAllocation(updated);
                   }}
-                  startTime={formData.productiveStart}
-                  endTime={formData.productiveEnd}
-                  minDuration={TIME_LIMITS.productive.min}
-                  maxDuration={TIME_LIMITS.productive.max}
-                  onStartTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, productiveStart: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.productiveStart;
-                      delete newErrors.productiveDuration;
-                      delete newErrors.productiveOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  onEndTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, productiveEnd: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.productiveEnd;
-                      delete newErrors.productiveDuration;
-                      delete newErrors.productiveOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  error={
-                    validationErrors.productiveDuration ||
-                    validationErrors.productiveOverlap ||
-                    undefined
-                  }
-                  isEditing={true}
                 />
 
-                {/* Family Time */}
-                <TimeBlockCard
+                {/* Family */}
+                <CategoryTimeSlots
                   id="familyTime"
-                  title="Family Time"
+                  label="Family"
                   icon={<Users className="w-5 h-5" />}
-                  color={{
-                    bg: "bg-orange-50",
-                    bgDark: "dark:bg-orange-900/20",
-                    border: "border-orange-200",
-                    borderDark: "dark:border-orange-800",
-                    text: "text-orange-700",
-                    textDark: "dark:text-orange-300",
-                    icon: "text-orange-600",
-                    iconDark: "dark:text-orange-400",
+                  color="orange"
+                  ranges={timeRanges.familyTime}
+                  validationErrors={validationErrors}
+                  onChange={(ranges) => {
+                    const updated = { ...timeRanges, familyTime: ranges };
+                    setTimeRanges(updated);
+                    // Validate in real-time
+                    validateTimeAllocation(updated);
                   }}
-                  startTime={formData.familyTimeStart}
-                  endTime={formData.familyTimeEnd}
-                  minDuration={TIME_LIMITS.familyTime.min}
-                  maxDuration={TIME_LIMITS.familyTime.max}
-                  onStartTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, familyTimeStart: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.familyTimeStart;
-                      delete newErrors.familyTimeDuration;
-                      delete newErrors.familyTimeOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  onEndTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, familyTimeEnd: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.familyTimeEnd;
-                      delete newErrors.familyTimeDuration;
-                      delete newErrors.familyTimeOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  error={
-                    validationErrors.familyTimeDuration ||
-                    validationErrors.familyTimeOverlap ||
-                    undefined
-                  }
-                  isEditing={true}
                 />
 
-                {/* Journaling */}
-                <TimeBlockCard
+                {/* Journal */}
+                <CategoryTimeSlots
                   id="journal"
-                  title="Journal"
+                  label="Journal"
                   icon={<BookOpen className="w-5 h-5" />}
-                  color={{
-                    bg: "bg-indigo-50",
-                    bgDark: "dark:bg-indigo-900/20",
-                    border: "border-indigo-200",
-                    borderDark: "dark:border-indigo-800",
-                    text: "text-indigo-700",
-                    textDark: "dark:text-indigo-300",
-                    icon: "text-indigo-600",
-                    iconDark: "dark:text-indigo-400",
+                  color="amber"
+                  ranges={timeRanges.journal}
+                  validationErrors={validationErrors}
+                  onChange={(ranges) => {
+                    const updated = { ...timeRanges, journal: ranges };
+                    setTimeRanges(updated);
+                    // Validate in real-time
+                    validateTimeAllocation(updated);
                   }}
-                  startTime={formData.journalStart}
-                  endTime={formData.journalEnd}
-                  minDuration={TIME_LIMITS.journal.min}
-                  maxDuration={TIME_LIMITS.journal.max}
-                  onStartTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, journalStart: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.journalStart;
-                      delete newErrors.journalDuration;
-                      delete newErrors.journalOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  onEndTimeChange={(time) => {
-                    setFormData((prev) => ({ ...prev, journalEnd: time }));
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.journalEnd;
-                      delete newErrors.journalDuration;
-                      delete newErrors.journalOverlap;
-                      return newErrors;
-                    });
-                    validateTimeAllocation();
-                  }}
-                  error={
-                    validationErrors.journalDuration ||
-                    validationErrors.journalOverlap ||
-                    undefined
-                  }
-                  isEditing={true}
                 />
               </div>
 
@@ -738,19 +565,206 @@ export default function ProfileSetupPage() {
             </div>
 
             {/* Hidden inputs for form submission */}
-            <input type="hidden" name="personalWorkStart" value={formData.personalWorkStart} />
-            <input type="hidden" name="personalWorkEnd" value={formData.personalWorkEnd} />
-            <input type="hidden" name="workBlockStart" value={formData.workBlockStart} />
-            <input type="hidden" name="workBlockEnd" value={formData.workBlockEnd} />
-            <input type="hidden" name="productiveStart" value={formData.productiveStart} />
-            <input type="hidden" name="productiveEnd" value={formData.productiveEnd} />
-            <input type="hidden" name="familyTimeStart" value={formData.familyTimeStart} />
-            <input type="hidden" name="familyTimeEnd" value={formData.familyTimeEnd} />
-            <input type="hidden" name="journalStart" value={formData.journalStart} />
-            <input type="hidden" name="journalEnd" value={formData.journalEnd} />
+            <input
+              type="hidden"
+              name="personalWorkStart"
+              value={timeRanges.personalWork[0]?.startTime || ""}
+            />
+            <input
+              type="hidden"
+              name="personalWorkEnd"
+              value={timeRanges.personalWork[0]?.endTime || ""}
+            />
+            <input
+              type="hidden"
+              name="workBlockStart"
+              value={timeRanges.workBlock[0]?.startTime || ""}
+            />
+            <input
+              type="hidden"
+              name="workBlockEnd"
+              value={timeRanges.workBlock[0]?.endTime || ""}
+            />
+            <input
+              type="hidden"
+              name="productiveStart"
+              value={timeRanges.productive[0]?.startTime || ""}
+            />
+            <input
+              type="hidden"
+              name="productiveEnd"
+              value={timeRanges.productive[0]?.endTime || ""}
+            />
+            <input
+              type="hidden"
+              name="familyTimeStart"
+              value={timeRanges.familyTime[0]?.startTime || ""}
+            />
+            <input
+              type="hidden"
+              name="familyTimeEnd"
+              value={timeRanges.familyTime[0]?.endTime || ""}
+            />
+            <input
+              type="hidden"
+              name="journalStart"
+              value={timeRanges.journal[0]?.startTime || ""}
+            />
+            <input
+              type="hidden"
+              name="journalEnd"
+              value={timeRanges.journal[0]?.endTime || ""}
+            />
+            <input
+              type="hidden"
+              name="timeRanges"
+              value={JSON.stringify({
+                personalWork: timeRanges.personalWork,
+                workBlock: timeRanges.workBlock,
+                productive: timeRanges.productive,
+                familyTime: timeRanges.familyTime,
+                journaling: timeRanges.journal,
+              })}
+            />
           </form>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface CategoryTimeSlotsProps {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  color: "indigo" | "purple" | "teal" | "orange" | "amber";
+  ranges: { startTime: string; endTime: string }[];
+  validationErrors: Record<string, string>;
+  onChange: (ranges: { startTime: string; endTime: string }[]) => void;
+}
+
+function CategoryTimeSlots({
+  id,
+  label,
+  icon,
+  color,
+  ranges,
+  validationErrors,
+  onChange,
+}: CategoryTimeSlotsProps) {
+  const colorClasses: Record<string, { bg: string; pill: string }> = {
+    indigo: { bg: "bg-indigo-50 dark:bg-indigo-900/10", pill: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" },
+    purple: { bg: "bg-purple-50 dark:bg-purple-900/10", pill: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" },
+    teal: { bg: "bg-teal-50 dark:bg-teal-900/10", pill: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300" },
+    orange: { bg: "bg-orange-50 dark:bg-orange-900/10", pill: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
+    amber: { bg: "bg-amber-50 dark:bg-amber-900/10", pill: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  };
+
+  const hasOverlapError = !!validationErrors[`${id}Overlap`];
+  const hasCrossOverlapError = !!validationErrors[`${id}CrossOverlap`];
+
+  return (
+    <div
+      className={`p-4 sm:p-5 rounded-2xl border ${
+        hasOverlapError || hasCrossOverlapError ? "border-red-300 dark:border-red-700" : "border-slate-200/70 dark:border-slate-700/60"
+      } ${colorClasses[color].bg}`}
+    >
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-white/70 dark:bg-slate-900/60 shadow-sm">
+            {icon}
+          </div>
+          <div>
+            <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">{label}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Add one or more time slots for this category</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onChange([...ranges, { startTime: "", endTime: "" }])}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm hover:shadow-md transition-all ${colorClasses[color].pill}`}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add Time Slot
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {ranges.map((range, index) => (
+          <div
+            key={index}
+            className={`grid grid-cols-12 gap-2 items-end p-2 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-700/60`}
+          >
+            <div className="col-span-5">
+              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                Start Time (Slot {index + 1})
+              </label>
+              <input
+                type="time"
+                value={range.startTime}
+                onChange={(e) => {
+                  const updated = [...ranges];
+                  updated[index] = { ...updated[index], startTime: e.target.value };
+                  onChange(updated);
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+            <div className="col-span-5">
+              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">End Time</label>
+              <input
+                type="time"
+                value={range.endTime}
+                onChange={(e) => {
+                  const updated = [...ranges];
+                  updated[index] = { ...updated[index], endTime: e.target.value };
+                  onChange(updated);
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+            <div className="col-span-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = ranges.filter((_, i) => i !== index);
+                  onChange(updated.length ? updated : [{ startTime: "", endTime: "" }]);
+                }}
+                className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                aria-label="Delete time slot"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {validationErrors[`${id}Empty`] && (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium">
+          {validationErrors[`${id}Empty`]}
+        </p>
+      )}
+      {validationErrors[`${id}Overlap`] && (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium">
+          {validationErrors[`${id}Overlap`]}
+        </p>
+      )}
+      {validationErrors[`${id}CrossOverlap`] && (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium">
+          {validationErrors[`${id}CrossOverlap`]}
+        </p>
+      )}
+      {/* Show specific cross-overlap messages */}
+      {Object.keys(validationErrors)
+        .filter((key) => key.startsWith(`crossOverlap_${id}_`) || key.startsWith(`crossOverlap_`) && key.includes(`_${id}`))
+        .map((key) => (
+          <p key={key} className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium">
+            {validationErrors[key]}
+          </p>
+        ))}
     </div>
   );
 }

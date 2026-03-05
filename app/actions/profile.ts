@@ -27,6 +27,43 @@ function calculateDuration(startTime: string, endTime: string): number {
   return end - start;
 }
 
+// Helper function to check if two time ranges overlap (supports wrap-around)
+function timeRangesOverlap(
+  start1: string,
+  end1: string,
+  start2: string,
+  end2: string
+): boolean {
+  if (!start1 || !end1 || !start2 || !end2) return false;
+
+  const s1 = timeToMinutes(start1);
+  const e1 = timeToMinutes(end1);
+  const s2 = timeToMinutes(start2);
+  const e2 = timeToMinutes(end2);
+
+  const wraps1 = e1 < s1;
+  const wraps2 = e2 < s2;
+
+  if (wraps1 && wraps2) {
+    // Both wrap around - they always overlap
+    return true;
+  }
+
+  if (wraps1) {
+    // Range1 wraps: check if range2 overlaps with either [s1, 24*60) or [0, e1]
+    return (s2 >= s1 && s2 < 24 * 60) || (e2 > 0 && e2 <= e1) || (s2 < e1);
+  }
+
+  if (wraps2) {
+    // Range2 wraps: check if range1 overlaps with either [s2, 24*60) or [0, e2]
+    return (s1 >= s2 && s1 < 24 * 60) || (e1 > 0 && e1 <= e2) || (s1 < e2);
+  }
+
+  // Normal case: both ranges are within the same day
+  // Ranges overlap if one starts before the other ends
+  return !(e1 <= s2 || e2 <= s1);
+}
+
 // Check if a time range is completely within another time range
 function isTimeRangeWithin(
   innerStart: string,
@@ -82,7 +119,7 @@ function mapHabitCategoryToTimeAllocation(category: string): string | null {
   return mapping[category] || null;
 }
 
-// Validate existing habits against new time ranges
+// Validate existing habits against new time ranges (supports multiple ranges per category)
 async function validateExistingHabits(
   userId: string,
   newTimeCategories: any
@@ -101,14 +138,20 @@ async function validateExistingHabits(
       if (!timeAllocationKey || !newTimeCategories[timeAllocationKey]) continue;
 
       const timeCategory = newTimeCategories[timeAllocationKey];
-      if (!timeCategory.startTime || !timeCategory.endTime) continue;
+      const ranges = timeCategory.ranges || [];
+      if (!ranges.length) continue;
 
-      if (!isTimeRangeWithin(
-        habit.startTime!,
-        habit.endTime!,
-        timeCategory.startTime,
-        timeCategory.endTime
-      )) {
+      // A habit is considered valid if it fits completely within at least one range
+      const fitsInSomeRange = ranges.some((range: any) =>
+        isTimeRangeWithin(
+          habit.startTime!,
+          habit.endTime!,
+          range.startTime,
+          range.endTime
+        )
+      );
+
+      if (!fitsInSomeRange) {
         const categoryNames: { [key: string]: string } = {
           personalWork: "Personal",
           workBlock: "Work Block",
@@ -117,8 +160,9 @@ async function validateExistingHabits(
           journaling: "Journal",
         };
         const categoryName = categoryNames[timeAllocationKey] || timeAllocationKey;
+        const firstRange = ranges[0];
         warnings.push(
-          `Habit "${habit.name}" (${habit.startTime} - ${habit.endTime}) is outside the new ${categoryName} Time range (${timeCategory.startTime} - ${timeCategory.endTime})`
+          `Habit "${habit.name}" (${habit.startTime} - ${habit.endTime}) is outside the new ${categoryName} time ranges (e.g. ${firstRange.startTime} - ${firstRange.endTime})`
         );
       }
     }
@@ -129,33 +173,20 @@ async function validateExistingHabits(
   return { warnings };
 }
 
-// Time limits in minutes
-const TIME_LIMITS = {
-  personalWork: { min: 75, max: 150 }, // 1h15min - 2h30min
-  workBlock: { min: 120, max: 240 }, // 2h - 4h
-  productive: { min: 105, max: 210 }, // 1h45min - 3h30min
-  familyTime: { min: 60, max: 120 }, // 1h - 2h
-  journal: { min: 30, max: 60 }, // 30min - 1h
-};
-
 const profileSetupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   dateOfBirth: z.string().min(1, "Date of birth is required"),
   profession: z.string().min(1, "Profession is required"),
   pinCode: z.string().min(1, "Pin code is required"),
-  // Personal Work
+  // These are kept for backward compatibility and represent the first slot in each category
   personalWorkStart: z.string().min(1, "Personal Work start time is required"),
   personalWorkEnd: z.string().min(1, "Personal Work end time is required"),
-  // Work Block
   workBlockStart: z.string().min(1, "Work Block start time is required"),
   workBlockEnd: z.string().min(1, "Work Block end time is required"),
-  // Productive
   productiveStart: z.string().min(1, "Productive start time is required"),
   productiveEnd: z.string().min(1, "Productive end time is required"),
-  // Family Time
   familyTimeStart: z.string().min(1, "Family Time start time is required"),
   familyTimeEnd: z.string().min(1, "Family Time end time is required"),
-  // Journal
   journalStart: z.string().min(1, "Journal start time is required"),
   journalEnd: z.string().min(1, "Journal end time is required"),
 });
@@ -180,192 +211,204 @@ export async function saveProfileSetup(formData: FormData) {
       dateOfBirth: (formData.get("dateOfBirth") as string) || "",
       profession: (formData.get("profession") as string) || "",
       pinCode: (formData.get("pinCode") as string) || "",
-      // Personal Work
+      // First slot per category (for backward compatibility)
       personalWorkStart: (formData.get("personalWorkStart") as string) || "",
       personalWorkEnd: (formData.get("personalWorkEnd") as string) || "",
-      // Work Block
       workBlockStart: (formData.get("workBlockStart") as string) || "",
       workBlockEnd: (formData.get("workBlockEnd") as string) || "",
-      // Productive
       productiveStart: (formData.get("productiveStart") as string) || "",
       productiveEnd: (formData.get("productiveEnd") as string) || "",
-      // Family Time
       familyTimeStart: (formData.get("familyTimeStart") as string) || "",
       familyTimeEnd: (formData.get("familyTimeEnd") as string) || "",
-      // Journal
       journalStart: (formData.get("journalStart") as string) || "",
       journalEnd: (formData.get("journalEnd") as string) || "",
     };
 
     const validatedData = profileSetupSchema.parse(rawData);
 
-    // Validate durations
-    const personalWorkDuration = calculateDuration(validatedData.personalWorkStart, validatedData.personalWorkEnd);
-    const workBlockDuration = calculateDuration(validatedData.workBlockStart, validatedData.workBlockEnd);
-    const productiveDuration = calculateDuration(validatedData.productiveStart, validatedData.productiveEnd);
-    const familyTimeDuration = calculateDuration(validatedData.familyTimeStart, validatedData.familyTimeEnd);
-    const journalDuration = calculateDuration(validatedData.journalStart, validatedData.journalEnd);
+    // Parse full time ranges payload when available (supports multiple slots per category)
+    const timeRangesRaw = formData.get("timeRanges") as string | null;
+    let rangesPayload: any | null = null;
+    if (timeRangesRaw) {
+      try {
+        rangesPayload = JSON.parse(timeRangesRaw);
+      } catch (e) {
+        console.error("[PROFILE ACTION] Invalid timeRanges payload in profile setup:", e);
+        return { success: false, error: "Invalid time ranges data" };
+      }
+    }
 
-    // Check duration limits with detailed error messages
-    const personalWorkHours = Math.floor(personalWorkDuration / 60);
-    const personalWorkMins = personalWorkDuration % 60;
-    const personalWorkMinHours = Math.floor(TIME_LIMITS.personalWork.min / 60);
-    const personalWorkMinMins = TIME_LIMITS.personalWork.min % 60;
-    const personalWorkMaxHours = Math.floor(TIME_LIMITS.personalWork.max / 60);
-    const personalWorkMaxMins = TIME_LIMITS.personalWork.max % 60;
-    
-    if (personalWorkDuration < TIME_LIMITS.personalWork.min) {
-      return { success: false, error: `Personal Work duration (${personalWorkHours}h ${personalWorkMins}min) is less than the minimum required time of ${personalWorkMinHours}h ${personalWorkMinMins}min` };
-    } else if (personalWorkDuration > TIME_LIMITS.personalWork.max) {
-      return { success: false, error: `Personal Work duration (${personalWorkHours}h ${personalWorkMins}min) exceeds the maximum allowed time of ${personalWorkMaxHours}h ${personalWorkMaxMins}min` };
-    }
-    
-    const workBlockHours = Math.floor(workBlockDuration / 60);
-    const workBlockMins = workBlockDuration % 60;
-    const workBlockMinHours = Math.floor(TIME_LIMITS.workBlock.min / 60);
-    const workBlockMinMins = TIME_LIMITS.workBlock.min % 60;
-    const workBlockMaxHours = Math.floor(TIME_LIMITS.workBlock.max / 60);
-    const workBlockMaxMins = TIME_LIMITS.workBlock.max % 60;
-    
-    if (workBlockDuration < TIME_LIMITS.workBlock.min) {
-      return { success: false, error: `Work Block duration (${workBlockHours}h ${workBlockMins}min) is less than the minimum required time of ${workBlockMinHours}h ${workBlockMinMins}min` };
-    } else if (workBlockDuration > TIME_LIMITS.workBlock.max) {
-      return { success: false, error: `Work Block duration (${workBlockHours}h ${workBlockMins}min) exceeds the maximum allowed time of ${workBlockMaxHours}h ${workBlockMaxMins}min` };
-    }
-    
-    const productiveHours = Math.floor(productiveDuration / 60);
-    const productiveMins = productiveDuration % 60;
-    const productiveMinHours = Math.floor(TIME_LIMITS.productive.min / 60);
-    const productiveMinMins = TIME_LIMITS.productive.min % 60;
-    const productiveMaxHours = Math.floor(TIME_LIMITS.productive.max / 60);
-    const productiveMaxMins = TIME_LIMITS.productive.max % 60;
-    
-    if (productiveDuration < TIME_LIMITS.productive.min) {
-      return { success: false, error: `Productive duration (${productiveHours}h ${productiveMins}min) is less than the minimum required time of ${productiveMinHours}h ${productiveMinMins}min` };
-    } else if (productiveDuration > TIME_LIMITS.productive.max) {
-      return { success: false, error: `Productive duration (${productiveHours}h ${productiveMins}min) exceeds the maximum allowed time of ${productiveMaxHours}h ${productiveMaxMins}min` };
-    }
-    
-    const familyTimeHours = Math.floor(familyTimeDuration / 60);
-    const familyTimeMins = familyTimeDuration % 60;
-    const familyTimeMinHours = Math.floor(TIME_LIMITS.familyTime.min / 60);
-    const familyTimeMinMins = TIME_LIMITS.familyTime.min % 60;
-    const familyTimeMaxHours = Math.floor(TIME_LIMITS.familyTime.max / 60);
-    const familyTimeMaxMins = TIME_LIMITS.familyTime.max % 60;
-    
-    if (familyTimeDuration < TIME_LIMITS.familyTime.min) {
-      return { success: false, error: `Family Time duration (${familyTimeHours}h ${familyTimeMins}min) is less than the minimum required time of ${familyTimeMinHours}h ${familyTimeMinMins}min` };
-    } else if (familyTimeDuration > TIME_LIMITS.familyTime.max) {
-      return { success: false, error: `Family Time duration (${familyTimeHours}h ${familyTimeMins}min) exceeds the maximum allowed time of ${familyTimeMaxHours}h ${familyTimeMaxMins}min` };
-    }
-    
-    const journalHours = Math.floor(journalDuration / 60);
-    const journalMins = journalDuration % 60;
-    const journalMinHours = Math.floor(TIME_LIMITS.journal.min / 60);
-    const journalMinMins = TIME_LIMITS.journal.min % 60;
-    const journalMaxHours = Math.floor(TIME_LIMITS.journal.max / 60);
-    const journalMaxMins = TIME_LIMITS.journal.max % 60;
-    
-    if (journalDuration < TIME_LIMITS.journal.min) {
-      return { success: false, error: `Journal duration (${journalHours}h ${journalMins}min) is less than the minimum required time of ${journalMinHours}h ${journalMinMins}min` };
-    } else if (journalDuration > TIME_LIMITS.journal.max) {
-      return { success: false, error: `Journal duration (${journalHours}h ${journalMins}min) exceeds the maximum allowed time of ${journalMaxHours}h ${journalMaxMins}min` };
+    const categoriesConfig = [
+      { key: "personalWork", name: "Personal Work" },
+      { key: "workBlock", name: "Work Block" },
+      { key: "productive", name: "Productive" },
+      { key: "familyTime", name: "Family Time" },
+      { key: "journal", name: "Journal" },
+    ] as const;
+
+    let personalWorkDuration = 0;
+    let workBlockDuration = 0;
+    let productiveDuration = 0;
+    let familyTimeDuration = 0;
+    let journalDuration = 0;
+
+    type CategoryKey = (typeof categoriesConfig)[number]["key"];
+
+    const categoryDurations: Record<CategoryKey, number> = {
+      personalWork: 0,
+      workBlock: 0,
+      productive: 0,
+      familyTime: 0,
+      journal: 0,
+    };
+
+    const categoryRanges: Record<CategoryKey, { startTime: string; endTime: string }[]> = {
+      personalWork: [],
+      workBlock: [],
+      productive: [],
+      familyTime: [],
+      journal: [],
+    };
+
+    if (rangesPayload) {
+      // Build from full ranges payload
+      for (const cfg of categoriesConfig) {
+        const rawRanges = Array.isArray(rangesPayload[cfg.key])
+          ? rangesPayload[cfg.key]
+          : [];
+        const cleanedRanges = rawRanges
+          .filter((r: any) => r.startTime && r.endTime)
+          .map((r: any) => ({
+            startTime: r.startTime as string,
+            endTime: r.endTime as string,
+          }));
+
+        if (!cleanedRanges.length) {
+          return { success: false, error: `${cfg.name} must have at least one time slot` };
+        }
+
+        categoryRanges[cfg.key] = cleanedRanges;
+
+        // Per-category overlap check (within same category)
+        for (let i = 0; i < cleanedRanges.length; i++) {
+          for (let j = i + 1; j < cleanedRanges.length; j++) {
+            const r1 = cleanedRanges[i];
+            const r2 = cleanedRanges[j];
+            if (timeRangesOverlap(r1.startTime, r1.endTime, r2.startTime, r2.endTime)) {
+              return {
+                success: false,
+                error: `${cfg.name} slots ${i + 1} and ${j + 1} overlap`,
+              };
+            }
+          }
+        }
+
+        // Sum total minutes for this category
+        const totalMinutesForCategory = cleanedRanges.reduce(
+          (sum, r) => sum + calculateDuration(r.startTime, r.endTime),
+          0
+        );
+        categoryDurations[cfg.key] = totalMinutesForCategory;
+      }
+
+      personalWorkDuration = categoryDurations.personalWork;
+      workBlockDuration = categoryDurations.workBlock;
+      productiveDuration = categoryDurations.productive;
+      familyTimeDuration = categoryDurations.familyTime;
+      journalDuration = categoryDurations.journal;
+    } else {
+      // Fallback: single-range-per-category behavior (legacy)
+      personalWorkDuration = calculateDuration(
+        validatedData.personalWorkStart,
+        validatedData.personalWorkEnd
+      );
+      workBlockDuration = calculateDuration(
+        validatedData.workBlockStart,
+        validatedData.workBlockEnd
+      );
+      productiveDuration = calculateDuration(
+        validatedData.productiveStart,
+        validatedData.productiveEnd
+      );
+      familyTimeDuration = calculateDuration(
+        validatedData.familyTimeStart,
+        validatedData.familyTimeEnd
+      );
+      journalDuration = calculateDuration(
+        validatedData.journalStart,
+        validatedData.journalEnd
+      );
+
+      categoryRanges.personalWork = [
+        { startTime: validatedData.personalWorkStart, endTime: validatedData.personalWorkEnd },
+      ];
+      categoryRanges.workBlock = [
+        { startTime: validatedData.workBlockStart, endTime: validatedData.workBlockEnd },
+      ];
+      categoryRanges.productive = [
+        { startTime: validatedData.productiveStart, endTime: validatedData.productiveEnd },
+      ];
+      categoryRanges.familyTime = [
+        { startTime: validatedData.familyTimeStart, endTime: validatedData.familyTimeEnd },
+      ];
+      categoryRanges.journal = [
+        { startTime: validatedData.journalStart, endTime: validatedData.journalEnd },
+      ];
     }
 
     // Check total time doesn't exceed 24 hours
-    const totalMinutes = personalWorkDuration + workBlockDuration + productiveDuration + familyTimeDuration + journalDuration;
+    const totalMinutes =
+      personalWorkDuration +
+      workBlockDuration +
+      productiveDuration +
+      familyTimeDuration +
+      journalDuration;
     if (totalMinutes > 24 * 60) {
-      return { success: false, error: `Total allocated time (${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}min) exceeds 24 hours` };
-    }
-
-    // Check for overlaps (simplified - check if any ranges overlap)
-    const timeRanges = [
-      { start: validatedData.personalWorkStart, end: validatedData.personalWorkEnd, name: "Personal Work" },
-      { start: validatedData.workBlockStart, end: validatedData.workBlockEnd, name: "Work Block" },
-      { start: validatedData.productiveStart, end: validatedData.productiveEnd, name: "Productive" },
-      { start: validatedData.familyTimeStart, end: validatedData.familyTimeEnd, name: "Family Time" },
-      { start: validatedData.journalStart, end: validatedData.journalEnd, name: "Journal" },
-    ];
-
-    for (let i = 0; i < timeRanges.length; i++) {
-      for (let j = i + 1; j < timeRanges.length; j++) {
-        const range1 = timeRanges[i];
-        const range2 = timeRanges[j];
-        
-        const s1 = timeToMinutes(range1.start);
-        const e1 = timeToMinutes(range1.end);
-        const s2 = timeToMinutes(range2.start);
-        const e2 = timeToMinutes(range2.end);
-        
-        const wraps1 = e1 < s1;
-        const wraps2 = e2 < s2;
-        
-        let overlaps = false;
-        if (wraps1 && wraps2) {
-          overlaps = true;
-        } else if (wraps1) {
-          overlaps = (s2 >= s1 && s2 < 24 * 60) || (e2 > 0 && e2 <= e1) || (s2 < e1);
-        } else if (wraps2) {
-          overlaps = (s1 >= s2 && s1 < 24 * 60) || (e1 > 0 && e1 <= e2) || (s1 < e2);
-        } else {
-          overlaps = !(e1 <= s2 || e2 <= s1);
-        }
-        
-        if (overlaps) {
-          return { success: false, error: `${range1.name} overlaps with ${range2.name}` };
-        }
-      }
+      return {
+        success: false,
+        error: `Total allocated time (${Math.floor(totalMinutes / 60)}h ${
+          totalMinutes % 60
+        }min) exceeds 24 hours`,
+      };
     }
 
     const dob = new Date(validatedData.dateOfBirth);
     const age = calculateAge(dob);
 
-    // Calculate total hours for each category (for database storage)
-    const personalWorkTotalHours = personalWorkDuration / 60;
-    const workBlockTotalHours = workBlockDuration / 60;
-    const productiveTotalHours = productiveDuration / 60;
-    const familyTimeTotalHours = familyTimeDuration / 60;
-    const journalTotalHours = journalDuration / 60;
-
-    // Prepare time categories data
+    // Prepare time categories data from per-category ranges
     const timeCategoriesData = {
       personalWork: {
-        startTime: validatedData.personalWorkStart,
-        endTime: validatedData.personalWorkEnd,
-        totalHours: personalWorkTotalHours,
-        minAllocation: 50, // Default min allocation percentage
+        ranges: categoryRanges.personalWork,
+        totalHours: personalWorkDuration / 60,
+        minAllocation: 50,
       },
       workBlock: {
-        startTime: validatedData.workBlockStart,
-        endTime: validatedData.workBlockEnd,
-        totalHours: workBlockTotalHours,
-        minAllocation: 50, // Default min allocation percentage
+        ranges: categoryRanges.workBlock,
+        totalHours: workBlockDuration / 60,
+        minAllocation: 50,
       },
       productive: {
-        startTime: validatedData.productiveStart,
-        endTime: validatedData.productiveEnd,
-        totalHours: productiveTotalHours,
-        minAllocation: 50, // Default min allocation percentage
+        ranges: categoryRanges.productive,
+        totalHours: productiveDuration / 60,
+        minAllocation: 50,
       },
       familyTime: {
-        startTime: validatedData.familyTimeStart,
-        endTime: validatedData.familyTimeEnd,
-        totalHours: familyTimeTotalHours,
-        minAllocation: 50, // Default min allocation percentage
+        ranges: categoryRanges.familyTime,
+        totalHours: familyTimeDuration / 60,
+        minAllocation: 50,
       },
       journaling: {
-        startTime: validatedData.journalStart,
-        endTime: validatedData.journalEnd,
-        totalHours: journalTotalHours,
+        ranges: categoryRanges.journal,
+        totalHours: journalDuration / 60,
       },
     };
 
     console.log("[PROFILE ACTION] Storing time allocation ranges:", {
-      personalWork: `${timeCategoriesData.personalWork.startTime} - ${timeCategoriesData.personalWork.endTime}`,
-      workBlock: `${timeCategoriesData.workBlock.startTime} - ${timeCategoriesData.workBlock.endTime}`,
-      productive: `${timeCategoriesData.productive.startTime} - ${timeCategoriesData.productive.endTime}`,
-      familyTime: `${timeCategoriesData.familyTime.startTime} - ${timeCategoriesData.familyTime.endTime}`,
-      journaling: `${timeCategoriesData.journaling.startTime} - ${timeCategoriesData.journaling.endTime}`,
+      personalWork: timeCategoriesData.personalWork.ranges,
+      workBlock: timeCategoriesData.workBlock.ranges,
+      productive: timeCategoriesData.productive.ranges,
+      familyTime: timeCategoriesData.familyTime.ranges,
+      journaling: timeCategoriesData.journaling.ranges,
     });
 
     // Update user profile
@@ -389,11 +432,11 @@ export async function saveProfileSetup(formData: FormData) {
 
     // Verify time categories were saved
     console.log("[PROFILE ACTION] Time categories saved successfully:", {
-      personalWork: updatedUser.timeCategories?.personalWork ? `${updatedUser.timeCategories.personalWork.startTime} - ${updatedUser.timeCategories.personalWork.endTime}` : "Not saved",
-      workBlock: updatedUser.timeCategories?.workBlock ? `${updatedUser.timeCategories.workBlock.startTime} - ${updatedUser.timeCategories.workBlock.endTime}` : "Not saved",
-      productive: updatedUser.timeCategories?.productive ? `${updatedUser.timeCategories.productive.startTime} - ${updatedUser.timeCategories.productive.endTime}` : "Not saved",
-      familyTime: updatedUser.timeCategories?.familyTime ? `${updatedUser.timeCategories.familyTime.startTime} - ${updatedUser.timeCategories.familyTime.endTime}` : "Not saved",
-      journaling: updatedUser.timeCategories?.journaling ? `${updatedUser.timeCategories.journaling.startTime} - ${updatedUser.timeCategories.journaling.endTime}` : "Not saved",
+      personalWork: updatedUser.timeCategories?.personalWork?.ranges || [],
+      workBlock: updatedUser.timeCategories?.workBlock?.ranges || [],
+      productive: updatedUser.timeCategories?.productive?.ranges || [],
+      familyTime: updatedUser.timeCategories?.familyTime?.ranges || [],
+      journaling: updatedUser.timeCategories?.journaling?.ranges || [],
     });
 
     // Create birthday event in calendar
@@ -494,16 +537,16 @@ export async function getUserProfile() {
 }
 
 const updateTimeAllocationSchema = z.object({
-  personalWorkStart: z.string().optional(),
-  personalWorkEnd: z.string().optional(),
-  workBlockStart: z.string().optional(),
-  workBlockEnd: z.string().optional(),
-  productiveStart: z.string().optional(),
-  productiveEnd: z.string().optional(),
-  familyTimeStart: z.string().optional(),
-  familyTimeEnd: z.string().optional(),
-  journalStart: z.string().optional(),
-  journalEnd: z.string().optional(),
+  timeRanges: z
+    .string()
+    .transform((value) => {
+      try {
+        return JSON.parse(value);
+      } catch {
+        throw new Error("Invalid time ranges payload");
+      }
+    })
+    .optional(),
 });
 
 export async function updateTimeAllocation(formData: FormData) {
@@ -512,96 +555,12 @@ export async function updateTimeAllocation(formData: FormData) {
     await connectDB();
 
     const rawData = {
-      personalWorkStart: formData.get("personalWorkStart") as string | undefined,
-      personalWorkEnd: formData.get("personalWorkEnd") as string | undefined,
-      workBlockStart: formData.get("workBlockStart") as string | undefined,
-      workBlockEnd: formData.get("workBlockEnd") as string | undefined,
-      productiveStart: formData.get("productiveStart") as string | undefined,
-      productiveEnd: formData.get("productiveEnd") as string | undefined,
-      familyTimeStart: formData.get("familyTimeStart") as string | undefined,
-      familyTimeEnd: formData.get("familyTimeEnd") as string | undefined,
-      journalStart: formData.get("journalStart") as string | undefined,
-      journalEnd: formData.get("journalEnd") as string | undefined,
+      timeRanges: formData.get("timeRanges") as string | undefined,
     };
 
     const validatedData = updateTimeAllocationSchema.parse(rawData);
 
-    // Validate durations if times are provided
-    if (validatedData.personalWorkStart && validatedData.personalWorkEnd) {
-      const duration = calculateDuration(validatedData.personalWorkStart, validatedData.personalWorkEnd);
-      const currentHours = Math.floor(duration / 60);
-      const currentMins = duration % 60;
-      const minHours = Math.floor(TIME_LIMITS.personalWork.min / 60);
-      const minMins = TIME_LIMITS.personalWork.min % 60;
-      const maxHours = Math.floor(TIME_LIMITS.personalWork.max / 60);
-      const maxMins = TIME_LIMITS.personalWork.max % 60;
-      
-      if (duration < TIME_LIMITS.personalWork.min) {
-        return { success: false, error: `Personal Work duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min` };
-      } else if (duration > TIME_LIMITS.personalWork.max) {
-        return { success: false, error: `Personal Work duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min` };
-      }
-    }
-    if (validatedData.workBlockStart && validatedData.workBlockEnd) {
-      const duration = calculateDuration(validatedData.workBlockStart, validatedData.workBlockEnd);
-      const currentHours = Math.floor(duration / 60);
-      const currentMins = duration % 60;
-      const minHours = Math.floor(TIME_LIMITS.workBlock.min / 60);
-      const minMins = TIME_LIMITS.workBlock.min % 60;
-      const maxHours = Math.floor(TIME_LIMITS.workBlock.max / 60);
-      const maxMins = TIME_LIMITS.workBlock.max % 60;
-      
-      if (duration < TIME_LIMITS.workBlock.min) {
-        return { success: false, error: `Work Block duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min` };
-      } else if (duration > TIME_LIMITS.workBlock.max) {
-        return { success: false, error: `Work Block duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min` };
-      }
-    }
-    if (validatedData.productiveStart && validatedData.productiveEnd) {
-      const duration = calculateDuration(validatedData.productiveStart, validatedData.productiveEnd);
-      const currentHours = Math.floor(duration / 60);
-      const currentMins = duration % 60;
-      const minHours = Math.floor(TIME_LIMITS.productive.min / 60);
-      const minMins = TIME_LIMITS.productive.min % 60;
-      const maxHours = Math.floor(TIME_LIMITS.productive.max / 60);
-      const maxMins = TIME_LIMITS.productive.max % 60;
-      
-      if (duration < TIME_LIMITS.productive.min) {
-        return { success: false, error: `Productive duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min` };
-      } else if (duration > TIME_LIMITS.productive.max) {
-        return { success: false, error: `Productive duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min` };
-      }
-    }
-    if (validatedData.familyTimeStart && validatedData.familyTimeEnd) {
-      const duration = calculateDuration(validatedData.familyTimeStart, validatedData.familyTimeEnd);
-      const currentHours = Math.floor(duration / 60);
-      const currentMins = duration % 60;
-      const minHours = Math.floor(TIME_LIMITS.familyTime.min / 60);
-      const minMins = TIME_LIMITS.familyTime.min % 60;
-      const maxHours = Math.floor(TIME_LIMITS.familyTime.max / 60);
-      const maxMins = TIME_LIMITS.familyTime.max % 60;
-      
-      if (duration < TIME_LIMITS.familyTime.min) {
-        return { success: false, error: `Family Time duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min` };
-      } else if (duration > TIME_LIMITS.familyTime.max) {
-        return { success: false, error: `Family Time duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min` };
-      }
-    }
-    if (validatedData.journalStart && validatedData.journalEnd) {
-      const duration = calculateDuration(validatedData.journalStart, validatedData.journalEnd);
-      const currentHours = Math.floor(duration / 60);
-      const currentMins = duration % 60;
-      const minHours = Math.floor(TIME_LIMITS.journal.min / 60);
-      const minMins = TIME_LIMITS.journal.min % 60;
-      const maxHours = Math.floor(TIME_LIMITS.journal.max / 60);
-      const maxMins = TIME_LIMITS.journal.max % 60;
-      
-      if (duration < TIME_LIMITS.journal.min) {
-        return { success: false, error: `Journal duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min` };
-      } else if (duration > TIME_LIMITS.journal.max) {
-        return { success: false, error: `Journal duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min` };
-      }
-    }
+    const rangesPayload = (validatedData.timeRanges as any) || {};
 
     // Get current user to preserve existing values
     const currentUser = await User.findById(user.userId).lean();
@@ -609,147 +568,40 @@ export async function updateTimeAllocation(formData: FormData) {
       return { success: false, error: "User not found" };
     }
 
-    // Build update object, preserving existing values if not provided
+    // Build update object from ranges payload, preserving existing values if not provided
     const timeCategoriesUpdate: any = {};
 
-    if (currentUser.timeCategories) {
-      // Personal Work
-      if (currentUser.timeCategories.personalWork) {
-        const startTime = validatedData.personalWorkStart ?? currentUser.timeCategories.personalWork.startTime;
-        const endTime = validatedData.personalWorkEnd ?? currentUser.timeCategories.personalWork.endTime;
-        const duration = startTime && endTime ? calculateDuration(startTime, endTime) : 0;
-        timeCategoriesUpdate.personalWork = {
-          startTime,
-          endTime,
-          totalHours: duration / 60,
-        };
-      } else if (validatedData.personalWorkStart && validatedData.personalWorkEnd) {
-        const duration = calculateDuration(validatedData.personalWorkStart, validatedData.personalWorkEnd);
-        timeCategoriesUpdate.personalWork = {
-          startTime: validatedData.personalWorkStart,
-          endTime: validatedData.personalWorkEnd,
-          totalHours: duration / 60,
-        };
-      }
+    const categories = ["personalWork", "workBlock", "productive", "familyTime", "journaling"] as const;
 
-      // Work Block
-      if (currentUser.timeCategories.workBlock) {
-        const startTime = validatedData.workBlockStart ?? currentUser.timeCategories.workBlock.startTime;
-        const endTime = validatedData.workBlockEnd ?? currentUser.timeCategories.workBlock.endTime;
-        const duration = startTime && endTime ? calculateDuration(startTime, endTime) : 0;
-        timeCategoriesUpdate.workBlock = {
-          startTime,
-          endTime,
-          totalHours: duration / 60,
-        };
-      } else if (validatedData.workBlockStart && validatedData.workBlockEnd) {
-        const duration = calculateDuration(validatedData.workBlockStart, validatedData.workBlockEnd);
-        timeCategoriesUpdate.workBlock = {
-          startTime: validatedData.workBlockStart,
-          endTime: validatedData.workBlockEnd,
-          totalHours: duration / 60,
-        };
-      }
+    categories.forEach((key) => {
+      const incomingRanges = Array.isArray(rangesPayload[key]) ? rangesPayload[key] : undefined;
+      const existingCategory = currentUser.timeCategories?.[key] as any;
 
-      // Productive
-      if (currentUser.timeCategories.productive) {
-        const startTime = validatedData.productiveStart ?? currentUser.timeCategories.productive.startTime;
-        const endTime = validatedData.productiveEnd ?? currentUser.timeCategories.productive.endTime;
-        const duration = startTime && endTime ? calculateDuration(startTime, endTime) : 0;
-        timeCategoriesUpdate.productive = {
-          startTime,
-          endTime,
-          totalHours: duration / 60,
-        };
-      } else if (validatedData.productiveStart && validatedData.productiveEnd) {
-        const duration = calculateDuration(validatedData.productiveStart, validatedData.productiveEnd);
-        timeCategoriesUpdate.productive = {
-          startTime: validatedData.productiveStart,
-          endTime: validatedData.productiveEnd,
-          totalHours: duration / 60,
-        };
-      }
+      if (incomingRanges && incomingRanges.length) {
+        const cleanedRanges = incomingRanges
+          .filter((r: any) => r.startTime && r.endTime)
+          .map((r: any) => ({
+            startTime: r.startTime,
+            endTime: r.endTime,
+          }));
 
-      // Family Time
-      if (currentUser.timeCategories.familyTime) {
-        const startTime = validatedData.familyTimeStart ?? currentUser.timeCategories.familyTime.startTime;
-        const endTime = validatedData.familyTimeEnd ?? currentUser.timeCategories.familyTime.endTime;
-        const duration = startTime && endTime ? calculateDuration(startTime, endTime) : 0;
-        timeCategoriesUpdate.familyTime = {
-          startTime,
-          endTime,
-          totalHours: duration / 60,
-        };
-      } else if (validatedData.familyTimeStart && validatedData.familyTimeEnd) {
-        const duration = calculateDuration(validatedData.familyTimeStart, validatedData.familyTimeEnd);
-        timeCategoriesUpdate.familyTime = {
-          startTime: validatedData.familyTimeStart,
-          endTime: validatedData.familyTimeEnd,
-          totalHours: duration / 60,
-        };
-      }
+        const totalMinutes = cleanedRanges.reduce(
+          (sum: number, r: any) => sum + calculateDuration(r.startTime, r.endTime),
+          0
+        );
 
-      // Journaling
-      if (currentUser.timeCategories.journaling) {
-        const startTime = validatedData.journalStart ?? currentUser.timeCategories.journaling.startTime;
-        const endTime = validatedData.journalEnd ?? currentUser.timeCategories.journaling.endTime;
-        const duration = startTime && endTime ? calculateDuration(startTime, endTime) : 0;
-        timeCategoriesUpdate.journaling = {
-          startTime,
-          endTime,
-          totalHours: duration / 60,
+        timeCategoriesUpdate[key] = {
+          ranges: cleanedRanges,
+          totalHours: totalMinutes / 60,
+          ...(existingCategory && typeof existingCategory.minAllocation === "number"
+            ? { minAllocation: existingCategory.minAllocation }
+            : {}),
         };
-      } else if (validatedData.journalStart && validatedData.journalEnd) {
-        const duration = calculateDuration(validatedData.journalStart, validatedData.journalEnd);
-        timeCategoriesUpdate.journaling = {
-          startTime: validatedData.journalStart,
-          endTime: validatedData.journalEnd,
-          totalHours: duration / 60,
-        };
+      } else if (existingCategory) {
+        // Preserve existing category if no new payload was provided
+        timeCategoriesUpdate[key] = existingCategory;
       }
-    } else {
-      // If no timeCategories exist, create new ones
-      if (validatedData.personalWorkStart && validatedData.personalWorkEnd) {
-        const duration = calculateDuration(validatedData.personalWorkStart, validatedData.personalWorkEnd);
-        timeCategoriesUpdate.personalWork = {
-          startTime: validatedData.personalWorkStart,
-          endTime: validatedData.personalWorkEnd,
-          totalHours: duration / 60,
-        };
-      }
-      if (validatedData.workBlockStart && validatedData.workBlockEnd) {
-        const duration = calculateDuration(validatedData.workBlockStart, validatedData.workBlockEnd);
-        timeCategoriesUpdate.workBlock = {
-          startTime: validatedData.workBlockStart,
-          endTime: validatedData.workBlockEnd,
-          totalHours: duration / 60,
-        };
-      }
-      if (validatedData.productiveStart && validatedData.productiveEnd) {
-        const duration = calculateDuration(validatedData.productiveStart, validatedData.productiveEnd);
-        timeCategoriesUpdate.productive = {
-          startTime: validatedData.productiveStart,
-          endTime: validatedData.productiveEnd,
-          totalHours: duration / 60,
-        };
-      }
-      if (validatedData.familyTimeStart && validatedData.familyTimeEnd) {
-        const duration = calculateDuration(validatedData.familyTimeStart, validatedData.familyTimeEnd);
-        timeCategoriesUpdate.familyTime = {
-          startTime: validatedData.familyTimeStart,
-          endTime: validatedData.familyTimeEnd,
-          totalHours: duration / 60,
-        };
-      }
-      if (validatedData.journalStart && validatedData.journalEnd) {
-        const duration = calculateDuration(validatedData.journalStart, validatedData.journalEnd);
-        timeCategoriesUpdate.journaling = {
-          startTime: validatedData.journalStart,
-          endTime: validatedData.journalEnd,
-          totalHours: duration / 60,
-        };
-      }
-    }
+    });
 
     // Build the new time categories object
     const newTimeCategories = {
@@ -804,28 +656,6 @@ export async function updateSingleTimeCategory(category: string, startTime: stri
       return { success: false, error: "Start time and end time are required" };
     }
 
-    // Map category name for TIME_LIMITS
-    const categoryKey = category === "journaling" ? "journal" : category;
-    const limits = TIME_LIMITS[categoryKey as keyof typeof TIME_LIMITS];
-    if (!limits) {
-      return { success: false, error: "Invalid category limits" };
-    }
-
-    // Validate duration
-    const duration = calculateDuration(startTime, endTime);
-    const currentHours = Math.floor(duration / 60);
-    const currentMins = duration % 60;
-    const minHours = Math.floor(limits.min / 60);
-    const minMins = limits.min % 60;
-    const maxHours = Math.floor(limits.max / 60);
-    const maxMins = limits.max % 60;
-    
-    if (duration < limits.min) {
-      return { success: false, error: `${category} duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min` };
-    } else if (duration > limits.max) {
-      return { success: false, error: `${category} duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min` };
-    }
-
     // Get current user
     const currentUser = await User.findById(user.userId).lean();
     if (!currentUser) {
@@ -837,21 +667,24 @@ export async function updateSingleTimeCategory(category: string, startTime: stri
       ...(currentUser.timeCategories || {}),
     };
 
+    const duration = calculateDuration(startTime, endTime);
     const totalHours = duration / 60;
     
-    // Update only the specific category
+    // Update only the specific category by appending a new range
     if (category === "journaling") {
+      const existing = currentUser.timeCategories?.journaling as any;
+      const existingRanges = existing?.ranges || [];
       timeCategoriesUpdate.journaling = {
-        startTime,
-        endTime,
-        totalHours,
+        ranges: [...existingRanges, { startTime, endTime }],
+        totalHours: (existing?.totalHours || 0) + totalHours,
       };
     } else {
+      const existing = (currentUser.timeCategories as any)?.[category] || {};
+      const existingRanges = existing.ranges || [];
       timeCategoriesUpdate[category] = {
-        startTime,
-        endTime,
-        totalHours,
-        minAllocation: timeCategoriesUpdate[category]?.minAllocation || 50,
+        ranges: [...existingRanges, { startTime, endTime }],
+        totalHours: (existing.totalHours || 0) + totalHours,
+        minAllocation: existing.minAllocation || 50,
       };
     }
 

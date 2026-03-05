@@ -19,8 +19,8 @@ interface TimeBlockCardProps {
   };
   startTime: string;
   endTime: string;
-  minDuration: number; // in minutes
-  maxDuration: number; // in minutes
+  minDuration?: number; // optional: legacy, no longer enforced
+  maxDuration?: number; // optional: legacy, no longer enforced
   onStartTimeChange: (time: string) => void;
   onEndTimeChange: (time: string) => void;
   error?: string;
@@ -121,9 +121,10 @@ export default function TimeBlockCard({
   const [isValid, setIsValid] = useState(true);
 
   const duration = calculateDuration(startTime, endTime);
-  const isValidDuration = duration >= minDuration && duration <= maxDuration;
-  const progress = Math.min((duration / maxDuration) * 100, 100);
-  const isOverLimit = duration > maxDuration;
+  const hasLimits = typeof minDuration === "number" && typeof maxDuration === "number";
+  const isValidDuration = hasLimits ? duration >= (minDuration as number) && duration <= (maxDuration as number) : true;
+  const progress = hasLimits && maxDuration ? Math.min((duration / maxDuration) * 100, 100) : 0;
+  const isOverLimit = hasLimits && maxDuration ? duration > maxDuration : false;
 
   useEffect(() => {
     setIsValid(isValidDuration);
@@ -158,7 +159,9 @@ export default function TimeBlockCard({
             <div className="min-w-0 flex-1">
               <h3 className={`text-lg sm:text-xl lg:text-2xl font-bold mb-1 ${color.text} ${color.textDark}`}>{title}</h3>
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                {formatDuration(minDuration)} - {formatDuration(maxDuration)} allowed
+                {hasLimits && minDuration != null && maxDuration != null
+                  ? `${formatDuration(minDuration)} - ${formatDuration(maxDuration)} allowed`
+                  : "Choose any time that works for you"}
               </p>
             </div>
           </div>
@@ -199,8 +202,9 @@ export default function TimeBlockCard({
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => {
-                          const newEndTime = adjustDuration(startTime, endTime, -15, minDuration, maxDuration);
+                    onClick={() => {
+                      if (!hasLimits || minDuration == null || maxDuration == null) return;
+                      const newEndTime = adjustDuration(startTime, endTime, -15, minDuration, maxDuration);
                           if (newEndTime) {
                             onEndTimeChange(newEndTime);
                           }
@@ -212,8 +216,9 @@ export default function TimeBlockCard({
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          const newEndTime = adjustDuration(startTime, endTime, 15, minDuration, maxDuration);
+                    onClick={() => {
+                      if (!hasLimits || minDuration == null || maxDuration == null) return;
+                      const newEndTime = adjustDuration(startTime, endTime, 15, minDuration, maxDuration);
                           if (newEndTime) {
                             onEndTimeChange(newEndTime);
                           }
@@ -277,47 +282,53 @@ export default function TimeBlockCard({
                   </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">Duration Progress</span>
-                    <span className={`font-bold ${
-                      isValidDuration ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                    }`}>
-                      {Math.round(progress)}%
-                    </span>
-                  </div>
-                  <div className="relative h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        isOverLimit
-                          ? "bg-gradient-to-r from-red-400 to-red-600"
-                          : isValidDuration
-                          ? "bg-gradient-to-r from-green-400 to-green-600"
-                          : "bg-gradient-to-r from-yellow-400 to-yellow-600"
-                      } shadow-sm`}
-                      style={{ width: `${Math.min(progress, 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
+                {hasLimits && (
+                  <>
+                    {/* Progress Bar */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-600 dark:text-slate-400 font-medium">Duration Progress</span>
+                        <span
+                          className={`font-bold ${
+                            isValidDuration ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                          }`}
+                        >
+                          {Math.round(progress)}%
+                        </span>
+                      </div>
+                      <div className="relative h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            isOverLimit
+                              ? "bg-gradient-to-r from-red-400 to-red-600"
+                              : isValidDuration
+                              ? "bg-gradient-to-r from-green-400 to-green-600"
+                              : "bg-gradient-to-r from-yellow-400 to-yellow-600"
+                          } shadow-sm`}
+                          style={{ width: `${Math.min(progress, 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
 
-                {/* Validation Message */}
-                {!isValidDuration && (
-                  <div className="p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg sm:rounded-xl">
-                    <p className="text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium">
-                      {duration < minDuration
-                        ? `⚠️ Selected time must be at least ${formatDuration(minDuration)}.`
-                        : `⚠️ Selected time exceeds maximum of ${formatDuration(maxDuration)}.`}
-                    </p>
-                  </div>
-                )}
-                {isValidDuration && (
-                  <div className="p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg sm:rounded-xl">
-                    <p className="text-xs sm:text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-2">
-                      <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                      <span>Time allocation is within allowed range</span>
-                    </p>
-                  </div>
+                    {/* Validation Message */}
+                    {!isValidDuration && (
+                      <div className="p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg sm:rounded-xl">
+                        <p className="text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium">
+                          {duration < (minDuration as number)
+                            ? `⚠️ Selected time must be at least ${formatDuration(minDuration as number)}.`
+                            : `⚠️ Selected time exceeds maximum of ${formatDuration(maxDuration as number)}.`}
+                        </p>
+                      </div>
+                    )}
+                    {isValidDuration && (
+                      <div className="p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg sm:rounded-xl">
+                        <p className="text-xs sm:text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                          <span>Time allocation is within allowed range</span>
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}

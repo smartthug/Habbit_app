@@ -5,20 +5,12 @@ import { useRouter } from "next/navigation";
 import { logout } from "@/app/actions/auth";
 import { getUserProfile, updateTimeAllocation, updateProfilePicture, updateSingleTimeCategory } from "@/app/actions/profile";
 import { getTodayJournalCount } from "@/app/actions/journal";
-import { LogOut, Moon, Sun, User, Mail, Calendar, Briefcase, MapPin, Clock, Target, BookOpen, Users, Edit2, Save, X, Plus, Minus } from "lucide-react";
+import { LogOut, Moon, Sun, User, Mail, Calendar, Briefcase, MapPin, Clock, Target, BookOpen, Users, Edit2, Save, X, Plus, Minus, Pencil } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import ProfilePicture from "@/components/ProfilePicture";
 import { useTheme } from "@/components/ThemeProvider";
 import { format } from "date-fns";
 
-// Time limits in minutes
-const TIME_LIMITS = {
-  personalWork: { min: 75, max: 150 }, // 1h15min - 2h30min
-  workBlock: { min: 120, max: 240 }, // 2h - 4h
-  productive: { min: 105, max: 210 }, // 1h45min - 3h30min
-  familyTime: { min: 60, max: 120 }, // 1h - 2h
-  journal: { min: 30, max: 60 }, // 30min - 1h
-};
 
 // Helper function to convert time string (HH:MM) to minutes
 function timeToMinutes(time: string): number {
@@ -125,9 +117,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [editingTimeAllocation, setEditingTimeAllocation] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editingTimeSlot, setEditingTimeSlot] = useState<{category: string, index: number} | null>(null);
   const [timeAllocationForm, setTimeAllocationForm] = useState<any>({});
   const [savingTimeAllocation, setSavingTimeAllocation] = useState(false);
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
+  const [savingTimeSlot, setSavingTimeSlot] = useState<{category: string, index: number} | null>(null);
   const [timeAllocationError, setTimeAllocationError] = useState("");
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [savingProfilePicture, setSavingProfilePicture] = useState(false);
@@ -147,16 +141,11 @@ export default function ProfilePage() {
         // Initialize form with current values
         if (result.profile.timeCategories) {
           setTimeAllocationForm({
-            personalWorkStart: result.profile.timeCategories.personalWork?.startTime || "",
-            personalWorkEnd: result.profile.timeCategories.personalWork?.endTime || "",
-            workBlockStart: result.profile.timeCategories.workBlock?.startTime || "",
-            workBlockEnd: result.profile.timeCategories.workBlock?.endTime || "",
-            productiveStart: result.profile.timeCategories.productive?.startTime || "",
-            productiveEnd: result.profile.timeCategories.productive?.endTime || "",
-            familyTimeStart: result.profile.timeCategories.familyTime?.startTime || "",
-            familyTimeEnd: result.profile.timeCategories.familyTime?.endTime || "",
-            journalStart: result.profile.timeCategories.journaling?.startTime || "",
-            journalEnd: result.profile.timeCategories.journaling?.endTime || "",
+            personalWorkRanges: result.profile.timeCategories.personalWork?.ranges || [],
+            workBlockRanges: result.profile.timeCategories.workBlock?.ranges || [],
+            productiveRanges: result.profile.timeCategories.productive?.ranges || [],
+            familyTimeRanges: result.profile.timeCategories.familyTime?.ranges || [],
+            journalRanges: result.profile.timeCategories.journaling?.ranges || [],
           });
         }
       }
@@ -166,100 +155,76 @@ export default function ProfilePage() {
   }, []);
 
 
-  function validateTimeAllocation(): Record<string, string> {
+  // Validate there are no overlaps within the same category, across categories, and total time <= 24h
+  function validateTimeAllocation(formToValidate?: typeof timeAllocationForm): Record<string, string> {
+    const form = formToValidate || timeAllocationForm;
     const errors: Record<string, string> = {};
-    const timeBlocks: Array<{
-      key: string;
-      name: string;
-      start: string;
-      end: string;
-      limits: { min: number; max: number };
-    }> = [
-      {
-        key: "personalWork",
-        name: "Personal Work",
-        start: timeAllocationForm.personalWorkStart,
-        end: timeAllocationForm.personalWorkEnd,
-        limits: TIME_LIMITS.personalWork,
-      },
-      {
-        key: "workBlock",
-        name: "Work Block",
-        start: timeAllocationForm.workBlockStart,
-        end: timeAllocationForm.workBlockEnd,
-        limits: TIME_LIMITS.workBlock,
-      },
-      {
-        key: "productive",
-        name: "Productive",
-        start: timeAllocationForm.productiveStart,
-        end: timeAllocationForm.productiveEnd,
-        limits: TIME_LIMITS.productive,
-      },
-      {
-        key: "familyTime",
-        name: "Family Time",
-        start: timeAllocationForm.familyTimeStart,
-        end: timeAllocationForm.familyTimeEnd,
-        limits: TIME_LIMITS.familyTime,
-      },
-      {
-        key: "journal",
-        name: "Journal",
-        start: timeAllocationForm.journalStart,
-        end: timeAllocationForm.journalEnd,
-        limits: TIME_LIMITS.journal,
-      },
+    const categories: { key: string; name: string; ranges: { startTime: string; endTime: string }[] }[] = [
+      { key: "personalWork", name: "Personal", ranges: form.personalWorkRanges || [] },
+      { key: "workBlock", name: "Work", ranges: form.workBlockRanges || [] },
+      { key: "productive", name: "Productivity", ranges: form.productiveRanges || [] },
+      { key: "familyTime", name: "Family", ranges: form.familyTimeRanges || [] },
+      { key: "journal", name: "Journal", ranges: form.journalRanges || [] },
     ];
 
-    // Validate each time block
-    timeBlocks.forEach((block) => {
-      if (!block.start || !block.end) {
-        errors[`${block.key}Start`] = `${block.name} start time is required`;
-        errors[`${block.key}End`] = `${block.name} end time is required`;
-        return;
-      }
+    let totalMinutes = 0;
+    const allValidRanges: Array<{ category: string; categoryName: string; range: { startTime: string; endTime: string }; index: number }> = [];
 
-      const duration = calculateDuration(block.start, block.end);
-      const minHours = Math.floor(block.limits.min / 60);
-      const minMins = block.limits.min % 60;
-      const maxHours = Math.floor(block.limits.max / 60);
-      const maxMins = block.limits.max % 60;
-      const currentHours = Math.floor(duration / 60);
-      const currentMins = duration % 60;
+    // First pass: collect all valid ranges and check within-category overlaps
+    categories.forEach((category) => {
+      const ranges = category.ranges || [];
 
-      // Validate minimum time limit
-      if (duration < block.limits.min) {
-        errors[`${block.key}Duration`] = `${block.name} duration (${currentHours}h ${currentMins}min) is less than the minimum required time of ${minHours}h ${minMins}min. Please increase the duration.`;
-      } 
-      // Validate maximum time limit
-      else if (duration > block.limits.max) {
-        errors[`${block.key}Duration`] = `${block.name} duration (${currentHours}h ${currentMins}min) exceeds the maximum allowed time of ${maxHours}h ${maxMins}min. Please decrease the duration.`;
+      ranges.forEach((range, index) => {
+        if (!range.startTime || !range.endTime) {
+          errors[`${category.key}Range_${index}`] = `${category.name} range ${index + 1} must have both start and end time`;
+          return;
+        }
+
+        const duration = calculateDuration(range.startTime, range.endTime);
+        totalMinutes += duration;
+        allValidRanges.push({
+          category: category.key,
+          categoryName: category.name,
+          range,
+          index,
+        });
+      });
+
+      // Prevent overlaps within the same category
+      for (let i = 0; i < ranges.length; i++) {
+        for (let j = i + 1; j < ranges.length; j++) {
+          const r1 = ranges[i];
+          const r2 = ranges[j];
+          if (r1.startTime && r1.endTime && r2.startTime && r2.endTime) {
+            if (timeRangesOverlap(r1.startTime, r1.endTime, r2.startTime, r2.endTime)) {
+              errors[`${category.key}Overlap`] = `${category.name} ranges ${i + 1} and ${j + 1} overlap`;
+            }
+          }
+        }
       }
     });
 
-    // Check for overlaps
-    for (let i = 0; i < timeBlocks.length; i++) {
-      for (let j = i + 1; j < timeBlocks.length; j++) {
-        const block1 = timeBlocks[i];
-        const block2 = timeBlocks[j];
+    // Second pass: check for overlaps across different categories
+    for (let i = 0; i < allValidRanges.length; i++) {
+      for (let j = i + 1; j < allValidRanges.length; j++) {
+        const r1 = allValidRanges[i];
+        const r2 = allValidRanges[j];
         
-        if (block1.start && block1.end && block2.start && block2.end) {
-          if (timeRangesOverlap(block1.start, block1.end, block2.start, block2.end)) {
-            errors[`${block1.key}Overlap`] = `${block1.name} overlaps with ${block2.name}`;
-            errors[`${block2.key}Overlap`] = `${block2.name} overlaps with ${block1.name}`;
+        // Only check if they're from different categories
+        if (r1.category !== r2.category) {
+          if (timeRangesOverlap(r1.range.startTime, r1.range.endTime, r2.range.startTime, r2.range.endTime)) {
+            // Create a cross-category overlap error
+            const errorKey = `crossOverlap_${r1.category}_${r2.category}`;
+            if (!errors[errorKey]) {
+              errors[errorKey] = `${r1.categoryName} slot ${r1.index + 1} overlaps with ${r2.categoryName} slot ${r2.index + 1}`;
+            }
+            // Also mark both categories as having cross-overlaps
+            errors[`${r1.category}CrossOverlap`] = `${r1.categoryName} has overlapping time slots with other categories`;
+            errors[`${r2.category}CrossOverlap`] = `${r2.categoryName} has overlapping time slots with other categories`;
           }
         }
       }
     }
-
-    // Check total time doesn't exceed 24 hours
-    const totalMinutes = timeBlocks.reduce((sum, block) => {
-      if (block.start && block.end) {
-        return sum + calculateDuration(block.start, block.end);
-      }
-      return sum;
-    }, 0);
 
     if (totalMinutes > 24 * 60) {
       errors.totalTime = `Total allocated time (${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}min) exceeds 24 hours`;
@@ -282,7 +247,17 @@ export default function ProfilePage() {
       return;
     }
 
-    const formData = new FormData(e.currentTarget);
+    const formData = new FormData();
+    formData.append(
+      "timeRanges",
+      JSON.stringify({
+        personalWork: timeAllocationForm.personalWorkRanges || [],
+        workBlock: timeAllocationForm.workBlockRanges || [],
+        productive: timeAllocationForm.productiveRanges || [],
+        familyTime: timeAllocationForm.familyTimeRanges || [],
+        journaling: timeAllocationForm.journalRanges || [],
+      })
+    );
     const result = await updateTimeAllocation(formData);
 
     if (result.success && result.profile) {
@@ -303,32 +278,37 @@ export default function ProfilePage() {
   }
 
   async function handleSaveSingleCategory(category: string) {
-    const categoryKey = category === "journaling" ? "journal" : category;
-    const startKey = category === "journaling" ? "journalStart" : `${category}Start`;
-    const endKey = category === "journaling" ? "journalEnd" : `${category}End`;
-    
-    const startTime = timeAllocationForm[startKey];
-    const endTime = timeAllocationForm[endKey];
-
-    if (!startTime || !endTime) {
-      setTimeAllocationError(`${category} start and end times are required`);
-      return;
-    }
-
+    // For multi-range system, single-category updates go through the main save handler
     setSavingCategory(category);
     setTimeAllocationError("");
 
-    const result = await updateSingleTimeCategory(category, startTime, endTime);
+    const formData = new FormData();
+    formData.append(
+      "timeRanges",
+      JSON.stringify({
+        personalWork: timeAllocationForm.personalWorkRanges || [],
+        workBlock: timeAllocationForm.workBlockRanges || [],
+        productive: timeAllocationForm.productiveRanges || [],
+        familyTime: timeAllocationForm.familyTimeRanges || [],
+        journaling: timeAllocationForm.journalRanges || [],
+      })
+    );
+
+    const result = await updateTimeAllocation(formData);
 
     if (result.success && result.profile) {
       setProfile(result.profile);
       setEditingCategory(null);
-      // Update form with saved values
-      setTimeAllocationForm({
-        ...timeAllocationForm,
-        [startKey]: startTime,
-        [endKey]: endTime,
-      });
+      // Update form with saved values from server
+      if (result.profile.timeCategories) {
+        setTimeAllocationForm({
+          personalWorkRanges: result.profile.timeCategories.personalWork?.ranges || [],
+          workBlockRanges: result.profile.timeCategories.workBlock?.ranges || [],
+          productiveRanges: result.profile.timeCategories.productive?.ranges || [],
+          familyTimeRanges: result.profile.timeCategories.familyTime?.ranges || [],
+          journalRanges: result.profile.timeCategories.journaling?.ranges || [],
+        });
+      }
       // Show warnings if any habits are outside the new range
       if (result.warnings && result.warnings.length > 0) {
         setTimeAllocationWarnings(result.warnings);
@@ -356,16 +336,11 @@ export default function ProfilePage() {
     // Reset form to current profile values
     if (profile?.timeCategories) {
       setTimeAllocationForm({
-        personalWorkStart: profile.timeCategories.personalWork?.startTime || "",
-        personalWorkEnd: profile.timeCategories.personalWork?.endTime || "",
-        workBlockStart: profile.timeCategories.workBlock?.startTime || "",
-        workBlockEnd: profile.timeCategories.workBlock?.endTime || "",
-        productiveStart: profile.timeCategories.productive?.startTime || "",
-        productiveEnd: profile.timeCategories.productive?.endTime || "",
-        familyTimeStart: profile.timeCategories.familyTime?.startTime || "",
-        familyTimeEnd: profile.timeCategories.familyTime?.endTime || "",
-        journalStart: profile.timeCategories.journaling?.startTime || "",
-        journalEnd: profile.timeCategories.journaling?.endTime || "",
+        personalWorkRanges: profile.timeCategories.personalWork?.ranges || [],
+        workBlockRanges: profile.timeCategories.workBlock?.ranges || [],
+        productiveRanges: profile.timeCategories.productive?.ranges || [],
+        familyTimeRanges: profile.timeCategories.familyTime?.ranges || [],
+        journalRanges: profile.timeCategories.journaling?.ranges || [],
       });
     }
   }
@@ -374,16 +349,11 @@ export default function ProfilePage() {
     // Reset form to current profile values
     if (profile?.timeCategories) {
       setTimeAllocationForm({
-        personalWorkStart: profile.timeCategories.personalWork?.startTime || "",
-        personalWorkEnd: profile.timeCategories.personalWork?.endTime || "",
-        workBlockStart: profile.timeCategories.workBlock?.startTime || "",
-        workBlockEnd: profile.timeCategories.workBlock?.endTime || "",
-        productiveStart: profile.timeCategories.productive?.startTime || "",
-        productiveEnd: profile.timeCategories.productive?.endTime || "",
-        familyTimeStart: profile.timeCategories.familyTime?.startTime || "",
-        familyTimeEnd: profile.timeCategories.familyTime?.endTime || "",
-        journalStart: profile.timeCategories.journaling?.startTime || "",
-        journalEnd: profile.timeCategories.journaling?.endTime || "",
+        personalWorkRanges: profile.timeCategories.personalWork?.ranges || [],
+        workBlockRanges: profile.timeCategories.workBlock?.ranges || [],
+        productiveRanges: profile.timeCategories.productive?.ranges || [],
+        familyTimeRanges: profile.timeCategories.familyTime?.ranges || [],
+        journalRanges: profile.timeCategories.journaling?.ranges || [],
       });
     }
     setEditingTimeAllocation(false);
@@ -391,49 +361,106 @@ export default function ProfilePage() {
     setValidationErrors({});
   }
 
-  function handleAdjustDuration(
-    category: string,
-    adjustmentMinutes: number
-  ) {
-    const limits = TIME_LIMITS[category as keyof typeof TIME_LIMITS];
-    if (!limits) return;
-
-    let startKey = `${category}Start` as keyof typeof timeAllocationForm;
-    let endKey = `${category}End` as keyof typeof timeAllocationForm;
-    
-    // Handle journaling category name mismatch
-    if (category === "journal") {
-      startKey = "journalStart" as keyof typeof timeAllocationForm;
-      endKey = "journalEnd" as keyof typeof timeAllocationForm;
-    }
-
-    const startTime = timeAllocationForm[startKey] as string;
-    const currentEndTime = timeAllocationForm[endKey] as string;
-
-    if (!startTime || !currentEndTime) return;
-
-    const newEndTime = adjustDuration(
-      startTime,
-      currentEndTime,
-      adjustmentMinutes,
-      limits.min,
-      limits.max
-    );
-
-    if (newEndTime) {
+  function handleEditTimeSlot(category: string, index: number) {
+    // Ensure form is initialized with current profile values
+    if (profile?.timeCategories && (!timeAllocationForm.personalWorkRanges && !timeAllocationForm.workBlockRanges)) {
       setTimeAllocationForm({
-        ...timeAllocationForm,
-        [endKey]: newEndTime,
+        personalWorkRanges: profile.timeCategories.personalWork?.ranges || [],
+        workBlockRanges: profile.timeCategories.workBlock?.ranges || [],
+        productiveRanges: profile.timeCategories.productive?.ranges || [],
+        familyTimeRanges: profile.timeCategories.familyTime?.ranges || [],
+        journalRanges: profile.timeCategories.journaling?.ranges || [],
       });
-      // Clear validation errors for this category
-      setValidationErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[`${category}Duration`];
-        delete newErrors[`${category}Overlap`];
-        return newErrors;
+    }
+    setEditingTimeSlot({ category, index });
+    setTimeAllocationError("");
+    setValidationErrors({});
+  }
+
+  function handleCancelEditTimeSlot() {
+    setEditingTimeSlot(null);
+    setTimeAllocationError("");
+    setValidationErrors({});
+    // Reset form to current profile values
+    if (profile?.timeCategories) {
+      setTimeAllocationForm({
+        personalWorkRanges: profile.timeCategories.personalWork?.ranges || [],
+        workBlockRanges: profile.timeCategories.workBlock?.ranges || [],
+        productiveRanges: profile.timeCategories.productive?.ranges || [],
+        familyTimeRanges: profile.timeCategories.familyTime?.ranges || [],
+        journalRanges: profile.timeCategories.journaling?.ranges || [],
       });
     }
   }
+
+  async function handleSaveTimeSlot(category: string, index: number) {
+    setSavingTimeSlot({ category, index });
+    setTimeAllocationError("");
+
+    // Validate the specific time slot
+    const categoryKey = category === "journaling" ? "journal" : category;
+    // Map category name to form field name (journaling uses journalRanges)
+    const formFieldName = category === "journaling" ? "journalRanges" : `${category}Ranges`;
+    const ranges = timeAllocationForm[formFieldName] || [];
+    const range = ranges[index];
+
+    if (!range || !range.startTime || !range.endTime) {
+      setValidationErrors({ [`${categoryKey}Range_${index}`]: "Both start and end time are required" });
+      setSavingTimeSlot(null);
+      return;
+    }
+
+    // Validate overlaps
+    const errors = validateTimeAllocation();
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      setSavingTimeSlot(null);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append(
+      "timeRanges",
+      JSON.stringify({
+        personalWork: timeAllocationForm.personalWorkRanges || [],
+        workBlock: timeAllocationForm.workBlockRanges || [],
+        productive: timeAllocationForm.productiveRanges || [],
+        familyTime: timeAllocationForm.familyTimeRanges || [],
+        journaling: timeAllocationForm.journalRanges || [],
+      })
+    );
+
+    const result = await updateTimeAllocation(formData);
+
+    if (result.success && result.profile) {
+      setProfile(result.profile);
+      setEditingTimeSlot(null);
+      // Update form with saved values from server
+      if (result.profile.timeCategories) {
+        setTimeAllocationForm({
+          personalWorkRanges: result.profile.timeCategories.personalWork?.ranges || [],
+          workBlockRanges: result.profile.timeCategories.workBlock?.ranges || [],
+          productiveRanges: result.profile.timeCategories.productive?.ranges || [],
+          familyTimeRanges: result.profile.timeCategories.familyTime?.ranges || [],
+          journalRanges: result.profile.timeCategories.journaling?.ranges || [],
+        });
+      }
+      // Show warnings if any habits are outside the new range
+      if (result.warnings && result.warnings.length > 0) {
+        setTimeAllocationWarnings(result.warnings);
+      } else {
+        setTimeAllocationWarnings([]);
+      }
+      router.refresh();
+    } else {
+      setTimeAllocationError(result.error || "Failed to update time slot");
+      setTimeAllocationWarnings([]);
+    }
+    setSavingTimeSlot(null);
+  }
+
+  // In the new multi-range system we don't auto-adjust durations with fixed limits,
+  // so this helper is no longer used but kept for backward compatibility.
 
   async function handleProfilePictureChange(base64: string) {
     console.log("[PROFILE PAGE] Profile picture change initiated");
@@ -619,12 +646,53 @@ export default function ProfilePage() {
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-4 sm:mb-6">
                     <h2 className="font-semibold text-xl text-slate-900 dark:text-slate-100 tracking-tight">Daily Time Allocation</h2>
+                    {!editingTimeAllocation && (
+                      <button
+                        onClick={() => {
+                          // Initialize form with current profile values when entering edit mode
+                          if (profile?.timeCategories) {
+                            // Helper to convert legacy single time slot to ranges format
+                            const getRanges = (category: any) => {
+                              if (category?.ranges && category.ranges.length > 0) {
+                                return category.ranges;
+                              } else if (category?.startTime && category?.endTime) {
+                                // Convert legacy single time slot to ranges format
+                                return [{ startTime: category.startTime, endTime: category.endTime }];
+                              }
+                              return [{ startTime: "", endTime: "" }];
+                            };
+
+                            setTimeAllocationForm({
+                              personalWorkRanges: getRanges(profile.timeCategories.personalWork),
+                              workBlockRanges: getRanges(profile.timeCategories.workBlock),
+                              productiveRanges: getRanges(profile.timeCategories.productive),
+                              familyTimeRanges: getRanges(profile.timeCategories.familyTime),
+                              journalRanges: getRanges(profile.timeCategories.journaling),
+                            });
+                          }
+                          setEditingTimeAllocation(true);
+                          setValidationErrors({});
+                        }}
+                        className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors text-sm flex items-center gap-2"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit Time Slot
+                      </button>
+                    )}
                   </div>
                   {timeAllocationError && (
                     <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
                       {timeAllocationError}
                     </div>
                   )}
+                  {/* Show cross-category overlap errors */}
+                  {Object.keys(validationErrors)
+                    .filter((key) => key.startsWith("crossOverlap_"))
+                    .map((key) => (
+                      <div key={key} className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
+                        {validationErrors[key]}
+                      </div>
+                    ))}
                   {timeAllocationWarnings.length > 0 && (
                     <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
                       <div className="flex items-start gap-2">
@@ -652,454 +720,650 @@ export default function ProfilePage() {
                           {validationErrors.totalTime}
                         </div>
                       )}
-                      
+
+                      {/* Helper to render range editors for each category */}
                       {/* Personal Work */}
                       {profile.timeCategories.personalWork && (
-                        <div className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl ${validationErrors.personalWorkDuration || validationErrors.personalWorkOverlap ? "border-2 border-red-300 dark:border-red-700" : ""}`}>
-                          <div className="flex items-center gap-3 mb-3">
-                            <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
-                            <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Personal Work</p>
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">Allowed duration range: <span className="font-semibold text-indigo-600 dark:text-indigo-400">1h 15min to 2h 30min</span> (choose any time within this range)</p>
-                          <div className="grid grid-cols-2 gap-3 mb-2">
-                            <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                              <input
-                                type="time"
-                                name="personalWorkStart"
-                                value={timeAllocationForm.personalWorkStart || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, personalWorkStart: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.personalWorkStart;
-                                    delete newErrors.personalWorkDuration;
-                                    delete newErrors.personalWorkOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
+                        <div
+                          className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl ${
+                            validationErrors.personalWorkOverlap || validationErrors.personalWorkCrossOverlap ? "border-2 border-red-300 dark:border-red-700" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
+                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
+                                Personal
+                              </p>
                             </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
-                                <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentRanges = timeAllocationForm.personalWorkRanges || [];
+                                setTimeAllocationForm({
+                                  ...timeAllocationForm,
+                                  personalWorkRanges: [...currentRanges, { startTime: "", endTime: "" }],
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Add Time Slot
+                            </button>
+                          </div>
+
+                          {(timeAllocationForm.personalWorkRanges || []).map(
+                            (range: any, index: number) => (
+                              <div
+                                key={index}
+                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                  validationErrors[`personalWorkRange_${index}`]
+                                    ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
+                                    : ""
+                                }`}
+                              >
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    Start
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.startTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.personalWorkRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        startTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        personalWorkRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    End
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.endTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.personalWorkRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        endTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        personalWorkRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-2 flex justify-end">
                                   <button
                                     type="button"
-                                    onClick={() => handleAdjustDuration("personalWork", -15)}
-                                    disabled={!timeAllocationForm.personalWorkStart || !timeAllocationForm.personalWorkEnd}
-                                    className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Decrease by 15 minutes"
+                                    onClick={() => {
+                                      const updated = (timeAllocationForm.personalWorkRanges || []).filter((_, i) => i !== index);
+                                      setTimeAllocationForm({
+                                        ...timeAllocationForm,
+                                        personalWorkRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
+                                      });
+                                    }}
+                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    aria-label="Delete time slot"
                                   >
-                                    -15
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAdjustDuration("personalWork", 15)}
-                                    disabled={!timeAllocationForm.personalWorkStart || !timeAllocationForm.personalWorkEnd}
-                                    className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Increase by 15 minutes"
-                                  >
-                                    +15
+                                    <X className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
-                              <input
-                                type="time"
-                                name="personalWorkEnd"
-                                value={timeAllocationForm.personalWorkEnd || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, personalWorkEnd: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.personalWorkEnd;
-                                    delete newErrors.personalWorkDuration;
-                                    delete newErrors.personalWorkOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
-                            </div>
-                          </div>
-                          {timeAllocationForm.personalWorkStart && timeAllocationForm.personalWorkEnd && (() => {
-                            const duration = calculateDuration(timeAllocationForm.personalWorkStart, timeAllocationForm.personalWorkEnd);
-                            const isValid = duration >= TIME_LIMITS.personalWork.min && duration <= TIME_LIMITS.personalWork.max;
-                            return (
-                              <p className={`text-xs font-medium ${isValid ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                                Current duration: {Math.floor(duration / 60)}h {duration % 60}min {isValid ? "✓ (within range)" : "✗ (outside range)"}
-                              </p>
-                            );
-                          })()}
-                          {validationErrors.personalWorkDuration && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.personalWorkDuration}</p>
+                            )
                           )}
+
                           {validationErrors.personalWorkOverlap && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.personalWorkOverlap}</p>
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.personalWorkOverlap}
+                            </p>
                           )}
+                          {validationErrors.personalWorkCrossOverlap && (
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.personalWorkCrossOverlap}
+                            </p>
+                          )}
+                          {/* Show specific cross-overlap messages for personalWork */}
+                          {Object.keys(validationErrors)
+                            .filter((key) => key.startsWith("crossOverlap_personalWork_") || (key.startsWith("crossOverlap_") && key.includes("_personalWork")))
+                            .map((key) => (
+                              <p key={key} className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                {validationErrors[key]}
+                              </p>
+                            ))}
                         </div>
                       )}
 
                       {/* Work Block */}
                       {profile.timeCategories.workBlock && (
-                        <div className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl ${validationErrors.workBlockDuration || validationErrors.workBlockOverlap ? "border-2 border-red-300 dark:border-red-700" : ""}`}>
-                          <div className="flex items-center gap-3 mb-3">
-                            <Briefcase className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                            <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Work Block</p>
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">Allowed duration range: <span className="font-semibold text-purple-600 dark:text-purple-400">2h to 4h</span> (choose any time within this range)</p>
-                          <div className="grid grid-cols-2 gap-3 mb-2">
-                            <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                              <input
-                                type="time"
-                                name="workBlockStart"
-                                value={timeAllocationForm.workBlockStart || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, workBlockStart: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.workBlockStart;
-                                    delete newErrors.workBlockDuration;
-                                    delete newErrors.workBlockOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
+                        <div
+                          className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl ${
+                            validationErrors.workBlockOverlap || validationErrors.workBlockCrossOverlap ? "border-2 border-red-300 dark:border-red-700" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Briefcase className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
+                                Work
+                              </p>
                             </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
-                                <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentRanges = timeAllocationForm.workBlockRanges || [];
+                                setTimeAllocationForm({
+                                  ...timeAllocationForm,
+                                  workBlockRanges: [...currentRanges, { startTime: "", endTime: "" }],
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Add Time Slot
+                            </button>
+                          </div>
+
+                          {(timeAllocationForm.workBlockRanges || []).map(
+                            (range: any, index: number) => (
+                              <div
+                                key={index}
+                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                  validationErrors[`workBlockRange_${index}`]
+                                    ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
+                                    : ""
+                                }`}
+                              >
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    Start
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.startTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.workBlockRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        startTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        workBlockRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    End
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.endTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.workBlockRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        endTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        workBlockRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-2 flex justify-end">
                                   <button
                                     type="button"
-                                    onClick={() => handleAdjustDuration("workBlock", -15)}
-                                    disabled={!timeAllocationForm.workBlockStart || !timeAllocationForm.workBlockEnd}
-                                    className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Decrease by 15 minutes"
+                                    onClick={() => {
+                                      const updated = (timeAllocationForm.workBlockRanges || []).filter((_, i) => i !== index);
+                                      setTimeAllocationForm({
+                                        ...timeAllocationForm,
+                                        workBlockRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
+                                      });
+                                    }}
+                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    aria-label="Delete time slot"
                                   >
-                                    -15
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAdjustDuration("workBlock", 15)}
-                                    disabled={!timeAllocationForm.workBlockStart || !timeAllocationForm.workBlockEnd}
-                                    className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Increase by 15 minutes"
-                                  >
-                                    +15
+                                    <X className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
-                              <input
-                                type="time"
-                                name="workBlockEnd"
-                                value={timeAllocationForm.workBlockEnd || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, workBlockEnd: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.workBlockEnd;
-                                    delete newErrors.workBlockDuration;
-                                    delete newErrors.workBlockOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
-                            </div>
-                          </div>
-                          {timeAllocationForm.workBlockStart && timeAllocationForm.workBlockEnd && (() => {
-                            const duration = calculateDuration(timeAllocationForm.workBlockStart, timeAllocationForm.workBlockEnd);
-                            const isValid = duration >= TIME_LIMITS.workBlock.min && duration <= TIME_LIMITS.workBlock.max;
-                            return (
-                              <p className={`text-xs font-medium ${isValid ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                                Current duration: {Math.floor(duration / 60)}h {duration % 60}min {isValid ? "✓ (within range)" : "✗ (outside range)"}
-                              </p>
-                            );
-                          })()}
-                          {validationErrors.workBlockDuration && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.workBlockDuration}</p>
+                            )
                           )}
+
                           {validationErrors.workBlockOverlap && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.workBlockOverlap}</p>
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.workBlockOverlap}
+                            </p>
                           )}
+                          {validationErrors.workBlockCrossOverlap && (
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.workBlockCrossOverlap}
+                            </p>
+                          )}
+                          {/* Show specific cross-overlap messages for workBlock */}
+                          {Object.keys(validationErrors)
+                            .filter((key) => key.startsWith("crossOverlap_workBlock_") || (key.startsWith("crossOverlap_") && key.includes("_workBlock")))
+                            .map((key) => (
+                              <p key={key} className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                {validationErrors[key]}
+                              </p>
+                            ))}
                         </div>
                       )}
 
                       {/* Productive */}
                       {profile.timeCategories.productive && (
-                        <div className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl ${validationErrors.productiveDuration || validationErrors.productiveOverlap ? "border-2 border-red-300 dark:border-red-700" : ""}`}>
-                          <div className="flex items-center gap-3 mb-3">
-                            <Clock className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                            <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Productive</p>
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">Allowed duration range: <span className="font-semibold text-green-600 dark:text-green-400">1h 45min to 3h 30min</span> (choose any time within this range)</p>
-                          <div className="grid grid-cols-2 gap-3 mb-2">
-                            <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                              <input
-                                type="time"
-                                name="productiveStart"
-                                value={timeAllocationForm.productiveStart || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, productiveStart: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.productiveStart;
-                                    delete newErrors.productiveDuration;
-                                    delete newErrors.productiveOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
+                        <div
+                          className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl ${
+                            validationErrors.productiveOverlap || validationErrors.productiveCrossOverlap ? "border-2 border-red-300 dark:border-red-700" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Clock className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
+                                Productivity
+                              </p>
                             </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
-                                <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentRanges = timeAllocationForm.productiveRanges || [];
+                                setTimeAllocationForm({
+                                  ...timeAllocationForm,
+                                  productiveRanges: [...currentRanges, { startTime: "", endTime: "" }],
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg font-semibold hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Add Time Slot
+                            </button>
+                          </div>
+
+                          {(timeAllocationForm.productiveRanges || []).map(
+                            (range: any, index: number) => (
+                              <div
+                                key={index}
+                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                  validationErrors[`productiveRange_${index}`]
+                                    ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
+                                    : ""
+                                }`}
+                              >
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    Start
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.startTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.productiveRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        startTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        productiveRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    End
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.endTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.productiveRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        endTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        productiveRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-2 flex justify-end">
                                   <button
                                     type="button"
-                                    onClick={() => handleAdjustDuration("productive", -15)}
-                                    disabled={!timeAllocationForm.productiveStart || !timeAllocationForm.productiveEnd}
-                                    className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Decrease by 15 minutes"
+                                    onClick={() => {
+                                      const updated = (timeAllocationForm.productiveRanges || []).filter((_, i) => i !== index);
+                                      setTimeAllocationForm({
+                                        ...timeAllocationForm,
+                                        productiveRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
+                                      });
+                                    }}
+                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    aria-label="Delete time slot"
                                   >
-                                    -15
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAdjustDuration("productive", 15)}
-                                    disabled={!timeAllocationForm.productiveStart || !timeAllocationForm.productiveEnd}
-                                    className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Increase by 15 minutes"
-                                  >
-                                    +15
+                                    <X className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
-                              <input
-                                type="time"
-                                name="productiveEnd"
-                                value={timeAllocationForm.productiveEnd || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, productiveEnd: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.productiveEnd;
-                                    delete newErrors.productiveDuration;
-                                    delete newErrors.productiveOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
-                            </div>
-                          </div>
-                          {timeAllocationForm.productiveStart && timeAllocationForm.productiveEnd && (() => {
-                            const duration = calculateDuration(timeAllocationForm.productiveStart, timeAllocationForm.productiveEnd);
-                            const isValid = duration >= TIME_LIMITS.productive.min && duration <= TIME_LIMITS.productive.max;
-                            return (
-                              <p className={`text-xs font-medium ${isValid ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                                Current duration: {Math.floor(duration / 60)}h {duration % 60}min {isValid ? "✓ (within range)" : "✗ (outside range)"}
-                              </p>
-                            );
-                          })()}
-                          {validationErrors.productiveDuration && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.productiveDuration}</p>
+                            )
                           )}
+
                           {validationErrors.productiveOverlap && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.productiveOverlap}</p>
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.productiveOverlap}
+                            </p>
                           )}
+                          {validationErrors.productiveCrossOverlap && (
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.productiveCrossOverlap}
+                            </p>
+                          )}
+                          {/* Show specific cross-overlap messages for productive */}
+                          {Object.keys(validationErrors)
+                            .filter((key) => key.startsWith("crossOverlap_productive_") || (key.startsWith("crossOverlap_") && key.includes("_productive")))
+                            .map((key) => (
+                              <p key={key} className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                {validationErrors[key]}
+                              </p>
+                            ))}
                         </div>
                       )}
 
                       {/* Family Time */}
                       {profile.timeCategories.familyTime && (
-                        <div className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 border-pink-200 dark:border-pink-800 ${validationErrors.familyTimeDuration || validationErrors.familyTimeOverlap ? "border-red-300 dark:border-red-700" : ""}`}>
-                          <div className="flex items-center gap-3 mb-3">
-                            <Users className="w-5 h-5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
-                            <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Family Time (Compulsory)</p>
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">Allowed duration range: <span className="font-semibold text-pink-600 dark:text-pink-400">1h to 2h</span> (choose any time within this range)</p>
-                          <div className="grid grid-cols-2 gap-3 mb-2">
-                            <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                              <input
-                                type="time"
-                                name="familyTimeStart"
-                                value={timeAllocationForm.familyTimeStart || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, familyTimeStart: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.familyTimeStart;
-                                    delete newErrors.familyTimeDuration;
-                                    delete newErrors.familyTimeOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
+                        <div
+                          className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 border-pink-200 dark:border-pink-800 ${
+                            validationErrors.familyTimeOverlap || validationErrors.familyTimeCrossOverlap ? "border-red-300 dark:border-red-700" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Users className="w-5 h-5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
+                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
+                                Family Time
+                              </p>
                             </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
-                                <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentRanges = timeAllocationForm.familyTimeRanges || [];
+                                setTimeAllocationForm({
+                                  ...timeAllocationForm,
+                                  familyTimeRanges: [...currentRanges, { startTime: "", endTime: "" }],
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg font-semibold hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Add Time Slot
+                            </button>
+                          </div>
+
+                          {(timeAllocationForm.familyTimeRanges || []).map(
+                            (range: any, index: number) => (
+                              <div
+                                key={index}
+                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                  validationErrors[`familyTimeRange_${index}`]
+                                    ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
+                                    : ""
+                                }`}
+                              >
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    Start
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.startTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.familyTimeRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        startTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        familyTimeRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    End
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.endTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.familyTimeRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        endTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        familyTimeRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-2 flex justify-end">
                                   <button
                                     type="button"
-                                    onClick={() => handleAdjustDuration("familyTime", -15)}
-                                    disabled={!timeAllocationForm.familyTimeStart || !timeAllocationForm.familyTimeEnd}
-                                    className="px-2 py-1 text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded hover:bg-pink-200 dark:hover:bg-pink-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Decrease by 15 minutes"
+                                    onClick={() => {
+                                      const updated = (timeAllocationForm.familyTimeRanges || []).filter((_, i) => i !== index);
+                                      setTimeAllocationForm({
+                                        ...timeAllocationForm,
+                                        familyTimeRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
+                                      });
+                                    }}
+                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    aria-label="Delete time slot"
                                   >
-                                    -15
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAdjustDuration("familyTime", 15)}
-                                    disabled={!timeAllocationForm.familyTimeStart || !timeAllocationForm.familyTimeEnd}
-                                    className="px-2 py-1 text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded hover:bg-pink-200 dark:hover:bg-pink-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Increase by 15 minutes"
-                                  >
-                                    +15
+                                    <X className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
-                              <input
-                                type="time"
-                                name="familyTimeEnd"
-                                value={timeAllocationForm.familyTimeEnd || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, familyTimeEnd: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.familyTimeEnd;
-                                    delete newErrors.familyTimeDuration;
-                                    delete newErrors.familyTimeOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
-                            </div>
-                          </div>
-                          {timeAllocationForm.familyTimeStart && timeAllocationForm.familyTimeEnd && (() => {
-                            const duration = calculateDuration(timeAllocationForm.familyTimeStart, timeAllocationForm.familyTimeEnd);
-                            const isValid = duration >= TIME_LIMITS.familyTime.min && duration <= TIME_LIMITS.familyTime.max;
-                            return (
-                              <p className={`text-xs font-medium ${isValid ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                                Current duration: {Math.floor(duration / 60)}h {duration % 60}min {isValid ? "✓ (within range)" : "✗ (outside range)"}
-                              </p>
-                            );
-                          })()}
-                          {validationErrors.familyTimeDuration && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.familyTimeDuration}</p>
+                            )
                           )}
+
                           {validationErrors.familyTimeOverlap && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.familyTimeOverlap}</p>
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.familyTimeOverlap}
+                            </p>
                           )}
+                          {validationErrors.familyTimeCrossOverlap && (
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.familyTimeCrossOverlap}
+                            </p>
+                          )}
+                          {/* Show specific cross-overlap messages for familyTime */}
+                          {Object.keys(validationErrors)
+                            .filter((key) => key.startsWith("crossOverlap_familyTime_") || (key.startsWith("crossOverlap_") && key.includes("_familyTime")))
+                            .map((key) => (
+                              <p key={key} className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                {validationErrors[key]}
+                              </p>
+                            ))}
                         </div>
                       )}
 
                       {/* Journaling */}
                       {profile.timeCategories.journaling && (
-                        <div className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl ${validationErrors.journalDuration || validationErrors.journalOverlap ? "border-2 border-red-300 dark:border-red-700" : ""}`}>
-                          <div className="flex items-center gap-3 mb-3">
-                            <BookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                            <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Journaling</p>
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">Allowed duration range: <span className="font-semibold text-amber-600 dark:text-amber-400">30min to 1h</span> (choose any time within this range)</p>
-                          <div className="grid grid-cols-2 gap-3 mb-2">
-                            <div>
-                              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                              <input
-                                type="time"
-                                name="journalStart"
-                                value={timeAllocationForm.journalStart || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, journalStart: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.journalStart;
-                                    delete newErrors.journalDuration;
-                                    delete newErrors.journalOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
+                        <div
+                          className={`p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl ${
+                            validationErrors.journalOverlap || validationErrors.journalCrossOverlap ? "border-2 border-red-300 dark:border-red-700" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <BookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                              <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
+                                Journal
+                              </p>
                             </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="block text-xs text-slate-600 dark:text-slate-400">End Time</label>
-                                <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentRanges = timeAllocationForm.journalRanges || [];
+                                setTimeAllocationForm({
+                                  ...timeAllocationForm,
+                                  journalRanges: [...currentRanges, { startTime: "", endTime: "" }],
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg font-semibold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Add Time Slot
+                            </button>
+                          </div>
+
+                          {(timeAllocationForm.journalRanges || []).map(
+                            (range: any, index: number) => (
+                              <div
+                                key={index}
+                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                  validationErrors[`journalRange_${index}`]
+                                    ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
+                                    : ""
+                                }`}
+                              >
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    Start
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.startTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.journalRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        startTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        journalRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-5">
+                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                    End
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={range.endTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(timeAllocationForm.journalRanges || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        endTime: e.target.value,
+                                      };
+                                      const newForm = {
+                                        ...timeAllocationForm,
+                                        journalRanges: updated,
+                                      };
+                                      setTimeAllocationForm(newForm);
+                                      // Validate in real-time
+                                      setTimeout(() => validateTimeAllocation(newForm), 0);
+                                    }}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                  />
+                                </div>
+                                <div className="col-span-2 flex justify-end">
                                   <button
                                     type="button"
-                                    onClick={() => handleAdjustDuration("journal", -15)}
-                                    disabled={!timeAllocationForm.journalStart || !timeAllocationForm.journalEnd}
-                                    className="px-2 py-1 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Decrease by 15 minutes"
+                                    onClick={() => {
+                                      const updated = (timeAllocationForm.journalRanges || []).filter((_, i) => i !== index);
+                                      setTimeAllocationForm({
+                                        ...timeAllocationForm,
+                                        journalRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
+                                      });
+                                    }}
+                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    aria-label="Delete time slot"
                                   >
-                                    -15
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAdjustDuration("journal", 15)}
-                                    disabled={!timeAllocationForm.journalStart || !timeAllocationForm.journalEnd}
-                                    className="px-2 py-1 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Increase by 15 minutes"
-                                  >
-                                    +15
+                                    <X className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
-                              <input
-                                type="time"
-                                name="journalEnd"
-                                value={timeAllocationForm.journalEnd || ""}
-                                onChange={(e) => {
-                                  setTimeAllocationForm({ ...timeAllocationForm, journalEnd: e.target.value });
-                                  setValidationErrors((prev) => {
-                                    const newErrors = { ...prev };
-                                    delete newErrors.journalEnd;
-                                    delete newErrors.journalDuration;
-                                    delete newErrors.journalOverlap;
-                                    return newErrors;
-                                  });
-                                }}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                required
-                              />
-                            </div>
-                          </div>
-                          {timeAllocationForm.journalStart && timeAllocationForm.journalEnd && (() => {
-                            const duration = calculateDuration(timeAllocationForm.journalStart, timeAllocationForm.journalEnd);
-                            const isValid = duration >= TIME_LIMITS.journal.min && duration <= TIME_LIMITS.journal.max;
-                            return (
-                              <p className={`text-xs font-medium ${isValid ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                                Current duration: {Math.floor(duration / 60)}h {duration % 60}min {isValid ? "✓ (within range)" : "✗ (outside range)"}
-                              </p>
-                            );
-                          })()}
-                          {validationErrors.journalDuration && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.journalDuration}</p>
+                            )
                           )}
+
                           {validationErrors.journalOverlap && (
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.journalOverlap}</p>
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.journalOverlap}
+                            </p>
                           )}
+                          {validationErrors.journalCrossOverlap && (
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {validationErrors.journalCrossOverlap}
+                            </p>
+                          )}
+                          {/* Show specific cross-overlap messages for journal */}
+                          {Object.keys(validationErrors)
+                            .filter((key) => key.startsWith("crossOverlap_journal_") || (key.startsWith("crossOverlap_") && key.includes("_journal")))
+                            .map((key) => (
+                              <p key={key} className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                {validationErrors[key]}
+                              </p>
+                            ))}
                         </div>
                       )}
 
@@ -1136,7 +1400,83 @@ export default function ProfilePage() {
                               <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
                               <div>
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Personal Work</p>
-                                {profile.timeCategories.personalWork.startTime && profile.timeCategories.personalWork.endTime ? (
+                                {(profile.timeCategories.personalWork.ranges && profile.timeCategories.personalWork.ranges.length > 0) ? (
+                                  <div className="space-y-2">
+                                    {profile.timeCategories.personalWork.ranges.map((range: any, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                        {editingTimeSlot?.category === "personalWork" && editingTimeSlot?.index === idx ? (
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.personalWorkRanges?.[idx]?.startTime || range.startTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.personalWorkRanges || profile.timeCategories.personalWork.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  startTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  personalWorkRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.personalWorkRanges?.[idx]?.endTime || range.endTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.personalWorkRanges || profile.timeCategories.personalWork.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  endTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  personalWorkRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <button
+                                              onClick={() => handleSaveTimeSlot("personalWork", idx)}
+                                              disabled={savingTimeSlot?.category === "personalWork" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
+                                              aria-label="Save time slot"
+                                            >
+                                              <Save className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                              onClick={handleCancelEditTimeSlot}
+                                              disabled={savingTimeSlot?.category === "personalWork" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
+                                              aria-label="Cancel editing"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex-1">
+                                        {formatTime12Hour(range.startTime)} - {formatTime12Hour(range.endTime)}
+                                      </p>
+                                            <button
+                                              onClick={() => handleEditTimeSlot("personalWork", idx)}
+                                              className="p-1 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 transition-colors"
+                                              aria-label="Edit time slot"
+                                            >
+                                              <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-500 font-medium">
+                                      Total: {profile.timeCategories.personalWork.totalHours?.toFixed(1)} hours
+                                    </p>
+                                  </div>
+                                ) : profile.timeCategories.personalWork.startTime && profile.timeCategories.personalWork.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                                     {formatTime12Hour(profile.timeCategories.personalWork.startTime)} - {formatTime12Hour(profile.timeCategories.personalWork.endTime)} • {profile.timeCategories.personalWork.totalHours?.toFixed(1)} hours
                                   </p>
@@ -1147,59 +1487,7 @@ export default function ProfilePage() {
                                 )}
                               </div>
                             </div>
-                            {editingCategory === "personalWork" ? (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                <button
-                                  onClick={() => handleSaveSingleCategory("personalWork")}
-                                  disabled={savingCategory === "personalWork"}
-                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span className="truncate">{savingCategory === "personalWork" ? "Saving..." : "Save"}</span>
-                                </button>
-                                <button
-                                  onClick={handleCancelEditCategory}
-                                  disabled={savingCategory === "personalWork"}
-                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span>Cancel</span>
-                                </button>
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => handleEditCategory("personalWork")}
-                                className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors text-sm flex items-center gap-2"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                                Edit
-                              </button>
-                            )}
-                          </div>
-                          {editingCategory === "personalWork" && (
-                            <div className="mt-4 space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.personalWorkStart || profile.timeCategories.personalWork?.startTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, personalWorkStart: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.personalWorkEnd || profile.timeCategories.personalWork?.endTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, personalWorkEnd: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
 
@@ -1213,7 +1501,83 @@ export default function ProfilePage() {
                               <Briefcase className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
                               <div>
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Work Block</p>
-                                {profile.timeCategories.workBlock.startTime && profile.timeCategories.workBlock.endTime ? (
+                                {(profile.timeCategories.workBlock.ranges && profile.timeCategories.workBlock.ranges.length > 0) ? (
+                                  <div className="space-y-2">
+                                    {profile.timeCategories.workBlock.ranges.map((range: any, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                        {editingTimeSlot?.category === "workBlock" && editingTimeSlot?.index === idx ? (
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.workBlockRanges?.[idx]?.startTime || range.startTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.workBlockRanges || profile.timeCategories.workBlock.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  startTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  workBlockRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.workBlockRanges?.[idx]?.endTime || range.endTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.workBlockRanges || profile.timeCategories.workBlock.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  endTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  workBlockRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <button
+                                              onClick={() => handleSaveTimeSlot("workBlock", idx)}
+                                              disabled={savingTimeSlot?.category === "workBlock" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
+                                              aria-label="Save time slot"
+                                            >
+                                              <Save className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                              onClick={handleCancelEditTimeSlot}
+                                              disabled={savingTimeSlot?.category === "workBlock" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
+                                              aria-label="Cancel editing"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex-1">
+                                        {formatTime12Hour(range.startTime)} - {formatTime12Hour(range.endTime)}
+                                      </p>
+                                            <button
+                                              onClick={() => handleEditTimeSlot("workBlock", idx)}
+                                              className="p-1 rounded hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-600 dark:text-purple-400 transition-colors"
+                                              aria-label="Edit time slot"
+                                            >
+                                              <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-500 font-medium">
+                                      Total: {profile.timeCategories.workBlock.totalHours?.toFixed(1)} hours
+                                    </p>
+                                  </div>
+                                ) : profile.timeCategories.workBlock.startTime && profile.timeCategories.workBlock.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                                     {formatTime12Hour(profile.timeCategories.workBlock.startTime)} - {formatTime12Hour(profile.timeCategories.workBlock.endTime)} • {profile.timeCategories.workBlock.totalHours?.toFixed(1)} hours
                                   </p>
@@ -1224,59 +1588,7 @@ export default function ProfilePage() {
                                 )}
                               </div>
                             </div>
-                            {editingCategory === "workBlock" ? (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                <button
-                                  onClick={() => handleSaveSingleCategory("workBlock")}
-                                  disabled={savingCategory === "workBlock"}
-                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span className="truncate">{savingCategory === "workBlock" ? "Saving..." : "Save"}</span>
-                                </button>
-                                <button
-                                  onClick={handleCancelEditCategory}
-                                  disabled={savingCategory === "workBlock"}
-                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span>Cancel</span>
-                                </button>
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => handleEditCategory("workBlock")}
-                                className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-sm flex items-center gap-2"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                                Edit
-                              </button>
-                            )}
-                          </div>
-                          {editingCategory === "workBlock" && (
-                            <div className="mt-4 space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.workBlockStart || profile.timeCategories.workBlock?.startTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, workBlockStart: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.workBlockEnd || profile.timeCategories.workBlock?.endTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, workBlockEnd: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
 
@@ -1290,7 +1602,83 @@ export default function ProfilePage() {
                               <Clock className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                               <div>
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Productive</p>
-                                {profile.timeCategories.productive.startTime && profile.timeCategories.productive.endTime ? (
+                                {(profile.timeCategories.productive.ranges && profile.timeCategories.productive.ranges.length > 0) ? (
+                                  <div className="space-y-2">
+                                    {profile.timeCategories.productive.ranges.map((range: any, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                        {editingTimeSlot?.category === "productive" && editingTimeSlot?.index === idx ? (
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.productiveRanges?.[idx]?.startTime || range.startTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.productiveRanges || profile.timeCategories.productive.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  startTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  productiveRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.productiveRanges?.[idx]?.endTime || range.endTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.productiveRanges || profile.timeCategories.productive.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  endTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  productiveRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <button
+                                              onClick={() => handleSaveTimeSlot("productive", idx)}
+                                              disabled={savingTimeSlot?.category === "productive" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
+                                              aria-label="Save time slot"
+                                            >
+                                              <Save className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                              onClick={handleCancelEditTimeSlot}
+                                              disabled={savingTimeSlot?.category === "productive" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
+                                              aria-label="Cancel editing"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex-1">
+                                        {formatTime12Hour(range.startTime)} - {formatTime12Hour(range.endTime)}
+                                      </p>
+                                            <button
+                                              onClick={() => handleEditTimeSlot("productive", idx)}
+                                              className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 transition-colors"
+                                              aria-label="Edit time slot"
+                                            >
+                                              <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-500 font-medium">
+                                      Total: {profile.timeCategories.productive.totalHours?.toFixed(1)} hours
+                                    </p>
+                                  </div>
+                                ) : profile.timeCategories.productive.startTime && profile.timeCategories.productive.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                                     {formatTime12Hour(profile.timeCategories.productive.startTime)} - {formatTime12Hour(profile.timeCategories.productive.endTime)} • {profile.timeCategories.productive.totalHours?.toFixed(1)} hours
                                   </p>
@@ -1301,59 +1689,7 @@ export default function ProfilePage() {
                                 )}
                               </div>
                             </div>
-                            {editingCategory === "productive" ? (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                <button
-                                  onClick={() => handleSaveSingleCategory("productive")}
-                                  disabled={savingCategory === "productive"}
-                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span className="truncate">{savingCategory === "productive" ? "Saving..." : "Save"}</span>
-                                </button>
-                                <button
-                                  onClick={handleCancelEditCategory}
-                                  disabled={savingCategory === "productive"}
-                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span>Cancel</span>
-                                </button>
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => handleEditCategory("productive")}
-                                className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg font-semibold hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-sm flex items-center gap-2"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                                Edit
-                              </button>
-                            )}
-                          </div>
-                          {editingCategory === "productive" && (
-                            <div className="mt-4 space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.productiveStart || profile.timeCategories.productive?.startTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, productiveStart: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.productiveEnd || profile.timeCategories.productive?.endTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, productiveEnd: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
 
@@ -1366,8 +1702,84 @@ export default function ProfilePage() {
                             <div className="flex items-center gap-3">
                               <Users className="w-5 h-5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
                               <div>
-                                <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Family Time (Compulsory)</p>
-                                {profile.timeCategories.familyTime.startTime && profile.timeCategories.familyTime.endTime ? (
+                                <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Family Time</p>
+                                {(profile.timeCategories.familyTime.ranges && profile.timeCategories.familyTime.ranges.length > 0) ? (
+                                  <div className="space-y-2">
+                                    {profile.timeCategories.familyTime.ranges.map((range: any, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                        {editingTimeSlot?.category === "familyTime" && editingTimeSlot?.index === idx ? (
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.familyTimeRanges?.[idx]?.startTime || range.startTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.familyTimeRanges || profile.timeCategories.familyTime.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  startTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  familyTimeRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.familyTimeRanges?.[idx]?.endTime || range.endTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.familyTimeRanges || profile.timeCategories.familyTime.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  endTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  familyTimeRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <button
+                                              onClick={() => handleSaveTimeSlot("familyTime", idx)}
+                                              disabled={savingTimeSlot?.category === "familyTime" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
+                                              aria-label="Save time slot"
+                                            >
+                                              <Save className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                              onClick={handleCancelEditTimeSlot}
+                                              disabled={savingTimeSlot?.category === "familyTime" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
+                                              aria-label="Cancel editing"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex-1">
+                                        {formatTime12Hour(range.startTime)} - {formatTime12Hour(range.endTime)}
+                                      </p>
+                                            <button
+                                              onClick={() => handleEditTimeSlot("familyTime", idx)}
+                                              className="p-1 rounded hover:bg-pink-100 dark:hover:bg-pink-900/30 text-pink-600 dark:text-pink-400 transition-colors"
+                                              aria-label="Edit time slot"
+                                            >
+                                              <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-500 font-medium">
+                                      Total: {profile.timeCategories.familyTime.totalHours?.toFixed(1)} hours
+                                    </p>
+                                  </div>
+                                ) : profile.timeCategories.familyTime.startTime && profile.timeCategories.familyTime.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                                     {formatTime12Hour(profile.timeCategories.familyTime.startTime)} - {formatTime12Hour(profile.timeCategories.familyTime.endTime)} • {profile.timeCategories.familyTime.totalHours?.toFixed(1)} hours
                                   </p>
@@ -1378,59 +1790,7 @@ export default function ProfilePage() {
                                 )}
                               </div>
                             </div>
-                            {editingCategory === "familyTime" ? (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                <button
-                                  onClick={() => handleSaveSingleCategory("familyTime")}
-                                  disabled={savingCategory === "familyTime"}
-                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span className="truncate">{savingCategory === "familyTime" ? "Saving..." : "Save"}</span>
-                                </button>
-                                <button
-                                  onClick={handleCancelEditCategory}
-                                  disabled={savingCategory === "familyTime"}
-                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span>Cancel</span>
-                                </button>
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => handleEditCategory("familyTime")}
-                                className="px-4 py-2 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg font-semibold hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors text-sm flex items-center gap-2"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                                Edit
-                              </button>
-                            )}
-                          </div>
-                          {editingCategory === "familyTime" && (
-                            <div className="mt-4 space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.familyTimeStart || profile.timeCategories.familyTime?.startTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, familyTimeStart: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.familyTimeEnd || profile.timeCategories.familyTime?.endTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, familyTimeEnd: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
 
@@ -1444,7 +1804,83 @@ export default function ProfilePage() {
                               <BookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                               <div>
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Journaling</p>
-                                {profile.timeCategories.journaling.startTime && profile.timeCategories.journaling.endTime ? (
+                                {(profile.timeCategories.journaling.ranges && profile.timeCategories.journaling.ranges.length > 0) ? (
+                                  <div className="space-y-2">
+                                    {profile.timeCategories.journaling.ranges.map((range: any, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                        {editingTimeSlot?.category === "journaling" && editingTimeSlot?.index === idx ? (
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.journalRanges?.[idx]?.startTime || range.startTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.journalRanges || profile.timeCategories.journaling.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  startTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  journalRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <input
+                                              type="time"
+                                              value={timeAllocationForm.journalRanges?.[idx]?.endTime || range.endTime || ""}
+                                              onChange={(e) => {
+                                                const updated = [...(timeAllocationForm.journalRanges || profile.timeCategories.journaling.ranges || [])];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  endTime: e.target.value,
+                                                };
+                                                setTimeAllocationForm({
+                                                  ...timeAllocationForm,
+                                                  journalRanges: updated,
+                                                });
+                                              }}
+                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                            />
+                                            <button
+                                              onClick={() => handleSaveTimeSlot("journaling", idx)}
+                                              disabled={savingTimeSlot?.category === "journaling" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
+                                              aria-label="Save time slot"
+                                            >
+                                              <Save className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                              onClick={handleCancelEditTimeSlot}
+                                              disabled={savingTimeSlot?.category === "journaling" && savingTimeSlot?.index === idx}
+                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
+                                              aria-label="Cancel editing"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex-1">
+                                        {formatTime12Hour(range.startTime)} - {formatTime12Hour(range.endTime)}
+                                      </p>
+                                            <button
+                                              onClick={() => handleEditTimeSlot("journaling", idx)}
+                                              className="p-1 rounded hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-600 dark:text-amber-400 transition-colors"
+                                              aria-label="Edit time slot"
+                                            >
+                                              <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-500 font-medium">
+                                      Total: {profile.timeCategories.journaling.totalHours?.toFixed(1)} hour{profile.timeCategories.journaling.totalHours !== 1 ? "s" : ""}
+                                    </p>
+                                  </div>
+                                ) : profile.timeCategories.journaling.startTime && profile.timeCategories.journaling.endTime ? (
                                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                                     {formatTime12Hour(profile.timeCategories.journaling.startTime)} - {formatTime12Hour(profile.timeCategories.journaling.endTime)} • {profile.timeCategories.journaling.totalHours?.toFixed(1)} hour{profile.timeCategories.journaling.totalHours !== 1 ? "s" : ""}
                                   </p>
@@ -1455,59 +1891,7 @@ export default function ProfilePage() {
                                 )}
                               </div>
                             </div>
-                            {editingCategory === "journaling" ? (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                <button
-                                  onClick={() => handleSaveSingleCategory("journaling")}
-                                  disabled={savingCategory === "journaling"}
-                                  className="px-3 sm:px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span className="truncate">{savingCategory === "journaling" ? "Saving..." : "Save"}</span>
-                                </button>
-                                <button
-                                  onClick={handleCancelEditCategory}
-                                  disabled={savingCategory === "journaling"}
-                                  className="px-3 sm:px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold text-xs sm:text-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                                >
-                                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span>Cancel</span>
-                                </button>
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => handleEditCategory("journaling")}
-                                className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg font-semibold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors text-sm flex items-center gap-2"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                                Edit
-                              </button>
-                            )}
-                          </div>
-                          {editingCategory === "journaling" && (
-                            <div className="mt-4 space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Start Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.journalStart || profile.timeCategories.journaling?.startTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, journalStart: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">End Time</label>
-                                  <input
-                                    type="time"
-                                    value={timeAllocationForm.journalEnd || profile.timeCategories.journaling?.endTime || ""}
-                                    onChange={(e) => setTimeAllocationForm({ ...timeAllocationForm, journalEnd: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>

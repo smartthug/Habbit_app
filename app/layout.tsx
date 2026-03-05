@@ -20,6 +20,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Habit Cracker",
   },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {

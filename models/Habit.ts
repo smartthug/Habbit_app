@@ -69,8 +69,8 @@ const HabitSchema: Schema = new Schema(
     },
     priority: {
       type: String,
-      enum: ["low", "medium", "high"],
-      default: "medium",
+      enum: ["low", "high"],
+      default: "low",
     },
     reminderTime: {
       type: String,

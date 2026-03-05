@@ -106,11 +106,15 @@ export async function getAnalysisData() {
       ...completedHabits.map((h: any) => ({ ...h, type: "habit" })),
     ];
 
-    // Pending tasks include all incomplete habits from today (not done)
-    // This includes habits with status "pending", "skipped", or null (not logged)
-    // Also include past incomplete calendar events (pending work from yesterday or past months)
+    // Pending tasks include:
+    // 1. High priority incomplete habits from today (not done) - Low priority habits are excluded
+    // 2. Past incomplete calendar events (pending work from yesterday or past months)
+    const highPriorityIncompleteHabits = todayHabits
+      .filter((h: any) => h.priority === "high")
+      .map((h: any) => ({ ...h, type: "habit" }));
+    
     const pendingTasks = [
-      ...todayHabits.map((h: any) => ({ ...h, type: "habit" })),
+      ...highPriorityIncompleteHabits,
       ...pastIncompleteEvents.map((e: any) => ({
         ...e,
         type: e.type || "todo",
