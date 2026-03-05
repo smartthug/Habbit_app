@@ -305,7 +305,8 @@ export async function saveProfileSetup(formData: FormData) {
 
         // Sum total minutes for this category
         const totalMinutesForCategory = cleanedRanges.reduce(
-          (sum, r) => sum + calculateDuration(r.startTime, r.endTime),
+          (sum: number, r: { startTime: string; endTime: string }) =>
+            sum + calculateDuration(r.startTime, r.endTime),
           0
         );
         categoryDurations[cfg.key] = totalMinutesForCategory;

@@ -373,7 +373,10 @@ export default function TimeBlockCard({
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-600 dark:text-slate-400 font-medium">Duration</span>
                     <span className={`font-bold ${color.text} ${color.textDark}`}>
-                      {formatDuration(duration)} / {formatDuration(maxDuration)}
+                      {formatDuration(duration)}
+                      {hasLimits && maxDuration != null
+                        ? ` / ${formatDuration(maxDuration as number)}`
+                        : ""}
                     </span>
                   </div>
                   <div className="relative h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">

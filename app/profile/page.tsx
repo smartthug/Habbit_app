@@ -814,7 +814,9 @@ export default function ProfilePage() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const updated = (timeAllocationForm.personalWorkRanges || []).filter((_, i) => i !== index);
+                                      const updated = (timeAllocationForm.personalWorkRanges || []).filter(
+                                        (_: any, i: number) => i !== index
+                                      );
                                       setTimeAllocationForm({
                                         ...timeAllocationForm,
                                         personalWorkRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
@@ -943,7 +945,9 @@ export default function ProfilePage() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const updated = (timeAllocationForm.workBlockRanges || []).filter((_, i) => i !== index);
+                                      const updated = (timeAllocationForm.workBlockRanges || []).filter(
+                                        (_: any, i: number) => i !== index
+                                      );
                                       setTimeAllocationForm({
                                         ...timeAllocationForm,
                                         workBlockRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
@@ -1072,7 +1076,9 @@ export default function ProfilePage() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const updated = (timeAllocationForm.productiveRanges || []).filter((_, i) => i !== index);
+                                      const updated = (timeAllocationForm.productiveRanges || []).filter(
+                                        (_: any, i: number) => i !== index
+                                      );
                                       setTimeAllocationForm({
                                         ...timeAllocationForm,
                                         productiveRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
@@ -1201,7 +1207,9 @@ export default function ProfilePage() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const updated = (timeAllocationForm.familyTimeRanges || []).filter((_, i) => i !== index);
+                                      const updated = (timeAllocationForm.familyTimeRanges || []).filter(
+                                        (_: any, i: number) => i !== index
+                                      );
                                       setTimeAllocationForm({
                                         ...timeAllocationForm,
                                         familyTimeRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
@@ -1330,7 +1338,9 @@ export default function ProfilePage() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const updated = (timeAllocationForm.journalRanges || []).filter((_, i) => i !== index);
+                                      const updated = (timeAllocationForm.journalRanges || []).filter(
+                                        (_: any, i: number) => i !== index
+                                      );
                                       setTimeAllocationForm({
                                         ...timeAllocationForm,
                                         journalRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
