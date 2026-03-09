@@ -10,6 +10,7 @@ interface CalendarEventModalProps {
   onClose: () => void;
   selectedDate?: Date;
   event?: any;
+  defaultType?: "meeting" | "todo" | "birthday";
 }
 
 export default function CalendarEventModal({
@@ -17,6 +18,7 @@ export default function CalendarEventModal({
   onClose,
   selectedDate,
   event,
+  defaultType = "todo",
 }: CalendarEventModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -64,7 +66,7 @@ export default function CalendarEventModal({
         const date = selectedDate || new Date();
         setFormData({
           title: "",
-          type: "todo",
+          type: defaultType,
           description: "",
           date: date.toISOString().split("T")[0],
           time: "",
@@ -79,7 +81,7 @@ export default function CalendarEventModal({
       }
       setError("");
     }
-  }, [isOpen, event, selectedDate]);
+  }, [isOpen, event, selectedDate, defaultType]);
 
   if (!isOpen) return null;
 
@@ -117,24 +119,27 @@ export default function CalendarEventModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full h-full md:h-auto md:max-w-2xl bg-slate-50 dark:bg-slate-900 rounded-3xl md:rounded-3xl shadow-premium-xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 pb-0 sm:pb-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full max-h-[calc(100vh-6rem)] sm:max-h-[90vh] md:max-h-none md:h-auto md:max-w-2xl bg-slate-50 dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-premium-xl border border-slate-200/50 dark:border-slate-800/50 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200/50 dark:border-slate-800/50">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-            {event ? "Edit Todo" : "New Todo"}
+        <div className="flex-shrink-0 flex items-center justify-between p-4 sm:p-6 border-b border-slate-200/50 dark:border-slate-800/50">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 truncate pr-2">
+            {event
+              ? `Edit ${event.type.charAt(0).toUpperCase() + event.type.slice(1)}`
+              : `New ${formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}`}
           </h2>
           <button
             onClick={onClose}
-            className="tap-target p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="tap-target p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
             aria-label="Close"
           >
             <X className="w-6 h-6 text-slate-600 dark:text-slate-400" />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Form - scrollable body only */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4 sm:space-y-6">
           {error && (
             <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -353,19 +358,21 @@ export default function CalendarEventModal({
             )}
           </div>
 
-          {/* Submit Button */}
-          <div className="flex gap-3 pt-4">
+          </div>
+
+          {/* Sticky footer: Create/Cancel or Update - always visible, above nav on mobile */}
+          <div className="flex-shrink-0 flex gap-3 p-4 sm:p-6 pt-4 pb-24 sm:pb-6 safe-bottom bg-slate-50 dark:bg-slate-900 border-t border-slate-200/50 dark:border-slate-800/50">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              className="flex-1 min-h-[48px] px-4 sm:px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors tap-target"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 min-h-[48px] px-4 sm:px-6 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed tap-target"
             >
               {loading ? "Saving..." : event ? "Update" : "Create"}
             </button>

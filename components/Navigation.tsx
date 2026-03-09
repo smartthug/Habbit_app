@@ -162,9 +162,11 @@ export default function Navigation() {
             );
           })}
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setShowAddModal(true);
+            }}
             className="tap-target w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 text-white shadow-premium-lg hover:shadow-glow-sm transition-all duration-200 touch-active no-select focus-visible-premium active:scale-95 hover:scale-[1.02]"
-            aria-label="Add new item"
+            aria-label="Add new habit"
           >
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
               <Plus className="w-6 h-6 text-white" />
@@ -173,7 +175,11 @@ export default function Navigation() {
           </button>
         </div>
       </nav>
-      <AddModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+      <AddModal 
+        isOpen={showAddModal} 
+        onClose={() => setShowAddModal(false)} 
+        defaultTab="habit"
+      />
     </>
   );
 }

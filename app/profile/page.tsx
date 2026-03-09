@@ -532,15 +532,15 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom animate-fade-in">
-      <div className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
-        <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent dark:from-indigo-400 dark:to-purple-400 mb-6 md:mb-8 tracking-tight">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-20 md:pb-6 md:pl-20 lg:pl-64 safe-bottom animate-fade-in overflow-x-hidden">
+      <div className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6 md:py-8 min-w-0">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent dark:from-indigo-400 dark:to-purple-400 mb-4 sm:mb-6 md:mb-8 tracking-tight break-words">
           Profile
         </h1>
 
         {/* Profile Picture */}
         {profile && (
-          <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50 mb-4 animate-scale-in">
+          <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50 mb-4 animate-scale-in min-w-0">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-400/0 to-purple-400/0 dark:from-indigo-400/0 dark:to-purple-400/0 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             <div className="relative z-10 flex flex-col items-center">
               <ProfilePicture
@@ -567,10 +567,10 @@ export default function ProfilePage() {
         {/* Personal Information */}
         {profile && (
           <>
-            <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50 mb-4 animate-scale-in">
+            <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50 mb-4 animate-scale-in min-w-0">
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-400/0 to-purple-400/0 dark:from-indigo-400/0 dark:to-purple-400/0 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-              <div className="relative z-10">
-                <h2 className="font-semibold text-xl text-slate-900 dark:text-slate-100 mb-4 sm:mb-6 tracking-tight">Personal Information</h2>
+              <div className="relative z-10 min-w-0">
+                <h2 className="font-semibold text-xl text-slate-900 dark:text-slate-100 mb-4 sm:mb-6 tracking-tight break-words">Personal Information</h2>
                 <div className="space-y-4">
                   {/* Name */}
                   <div className="flex items-start gap-3 sm:gap-4">
@@ -641,11 +641,11 @@ export default function ProfilePage() {
 
             {/* Time Categories */}
             {profile.timeCategories && (
-              <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50 mb-4 animate-scale-in">
+              <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-800 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-premium-lg border border-slate-200/50 dark:border-slate-700/50 mb-4 animate-scale-in min-w-0">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-amber-400/0 to-orange-400/0 dark:from-amber-400/0 dark:to-orange-400/0 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                 <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-4 sm:mb-6">
-                    <h2 className="font-semibold text-xl text-slate-900 dark:text-slate-100 tracking-tight">Daily Time Allocation</h2>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 min-w-0">
+                    <h2 className="font-semibold text-xl text-slate-900 dark:text-slate-100 tracking-tight break-words">Daily Time Allocation</h2>
                     {!editingTimeAllocation && (
                       <button
                         onClick={() => {
@@ -673,9 +673,9 @@ export default function ProfilePage() {
                           setEditingTimeAllocation(true);
                           setValidationErrors({});
                         }}
-                        className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors text-sm flex items-center gap-2"
+                        className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 sm:py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors text-sm flex items-center justify-center gap-2 flex-shrink-0"
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Edit2 className="w-4 h-4 flex-shrink-0" />
                         Edit Time Slot
                       </button>
                     )}
@@ -729,8 +729,8 @@ export default function ProfilePage() {
                             validationErrors.personalWorkOverlap || validationErrors.personalWorkCrossOverlap ? "border-2 border-red-300 dark:border-red-700" : ""
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
                               <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
                               <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
                                 Personal
@@ -745,7 +745,7 @@ export default function ProfilePage() {
                                   personalWorkRanges: [...currentRanges, { startTime: "", endTime: "" }],
                                 });
                               }}
-                              className="px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                              className="px-3 py-2.5 sm:py-1.5 min-h-[44px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors text-xs sm:text-sm flex items-center justify-center gap-1.5 flex-shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Add Time Slot
@@ -756,13 +756,13 @@ export default function ProfilePage() {
                             (range: any, index: number) => (
                               <div
                                 key={index}
-                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                className={`mb-3 grid grid-cols-1 gap-3 sm:grid-cols-12 sm:gap-2 sm:items-end min-w-0 ${
                                   validationErrors[`personalWorkRange_${index}`]
                                     ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
                                     : ""
                                 }`}
                               >
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     Start
                                   </label>
@@ -783,10 +783,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     End
                                   </label>
@@ -807,10 +807,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-2 flex justify-end">
+                                <div className="flex justify-end sm:col-span-2">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -822,7 +822,7 @@ export default function ProfilePage() {
                                         personalWorkRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
                                       });
                                     }}
-                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    className="p-2.5 sm:p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                                     aria-label="Delete time slot"
                                   >
                                     <X className="w-4 h-4" />
@@ -860,8 +860,8 @@ export default function ProfilePage() {
                             validationErrors.workBlockOverlap || validationErrors.workBlockCrossOverlap ? "border-2 border-red-300 dark:border-red-700" : ""
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
                               <Briefcase className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
                               <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
                                 Work
@@ -876,7 +876,7 @@ export default function ProfilePage() {
                                   workBlockRanges: [...currentRanges, { startTime: "", endTime: "" }],
                                 });
                               }}
-                              className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                              className="px-3 py-2.5 sm:py-1.5 min-h-[44px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-xs sm:text-sm flex items-center justify-center gap-1.5 flex-shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Add Time Slot
@@ -887,13 +887,13 @@ export default function ProfilePage() {
                             (range: any, index: number) => (
                               <div
                                 key={index}
-                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                className={`mb-3 grid grid-cols-1 gap-3 sm:grid-cols-12 sm:gap-2 sm:items-end min-w-0 ${
                                   validationErrors[`workBlockRange_${index}`]
                                     ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
                                     : ""
                                 }`}
                               >
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     Start
                                   </label>
@@ -914,10 +914,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     End
                                   </label>
@@ -938,10 +938,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-2 flex justify-end">
+                                <div className="flex justify-end sm:col-span-2">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -953,7 +953,7 @@ export default function ProfilePage() {
                                         workBlockRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
                                       });
                                     }}
-                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    className="p-2.5 sm:p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                                     aria-label="Delete time slot"
                                   >
                                     <X className="w-4 h-4" />
@@ -991,8 +991,8 @@ export default function ProfilePage() {
                             validationErrors.productiveOverlap || validationErrors.productiveCrossOverlap ? "border-2 border-red-300 dark:border-red-700" : ""
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
                               <Clock className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                               <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
                                 Productivity
@@ -1007,7 +1007,7 @@ export default function ProfilePage() {
                                   productiveRanges: [...currentRanges, { startTime: "", endTime: "" }],
                                 });
                               }}
-                              className="px-3 py-1.5 bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg font-semibold hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                              className="px-3 py-2.5 sm:py-1.5 min-h-[44px] bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg font-semibold hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors text-xs sm:text-sm flex items-center justify-center gap-1.5 flex-shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Add Time Slot
@@ -1018,13 +1018,13 @@ export default function ProfilePage() {
                             (range: any, index: number) => (
                               <div
                                 key={index}
-                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                className={`mb-3 grid grid-cols-1 gap-3 sm:grid-cols-12 sm:gap-2 sm:items-end min-w-0 ${
                                   validationErrors[`productiveRange_${index}`]
                                     ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
                                     : ""
                                 }`}
                               >
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     Start
                                   </label>
@@ -1045,10 +1045,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     End
                                   </label>
@@ -1069,10 +1069,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-2 flex justify-end">
+                                <div className="flex justify-end sm:col-span-2">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1084,7 +1084,7 @@ export default function ProfilePage() {
                                         productiveRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
                                       });
                                     }}
-                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    className="p-2.5 sm:p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                                     aria-label="Delete time slot"
                                   >
                                     <X className="w-4 h-4" />
@@ -1122,8 +1122,8 @@ export default function ProfilePage() {
                             validationErrors.familyTimeOverlap || validationErrors.familyTimeCrossOverlap ? "border-red-300 dark:border-red-700" : ""
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
                               <Users className="w-5 h-5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
                               <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
                                 Family Time
@@ -1138,7 +1138,7 @@ export default function ProfilePage() {
                                   familyTimeRanges: [...currentRanges, { startTime: "", endTime: "" }],
                                 });
                               }}
-                              className="px-3 py-1.5 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg font-semibold hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                              className="px-3 py-2.5 sm:py-1.5 min-h-[44px] bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg font-semibold hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors text-xs sm:text-sm flex items-center justify-center gap-1.5 flex-shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Add Time Slot
@@ -1149,13 +1149,13 @@ export default function ProfilePage() {
                             (range: any, index: number) => (
                               <div
                                 key={index}
-                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                className={`mb-3 grid grid-cols-1 gap-3 sm:grid-cols-12 sm:gap-2 sm:items-end min-w-0 ${
                                   validationErrors[`familyTimeRange_${index}`]
                                     ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
                                     : ""
                                 }`}
                               >
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     Start
                                   </label>
@@ -1176,10 +1176,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     End
                                   </label>
@@ -1200,10 +1200,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-2 flex justify-end">
+                                <div className="flex justify-end sm:col-span-2">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1215,7 +1215,7 @@ export default function ProfilePage() {
                                         familyTimeRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
                                       });
                                     }}
-                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    className="p-2.5 sm:p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                                     aria-label="Delete time slot"
                                   >
                                     <X className="w-4 h-4" />
@@ -1253,8 +1253,8 @@ export default function ProfilePage() {
                             validationErrors.journalOverlap || validationErrors.journalCrossOverlap ? "border-2 border-red-300 dark:border-red-700" : ""
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
                               <BookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                               <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
                                 Journal
@@ -1269,7 +1269,7 @@ export default function ProfilePage() {
                                   journalRanges: [...currentRanges, { startTime: "", endTime: "" }],
                                 });
                               }}
-                              className="px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg font-semibold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors text-xs sm:text-sm flex items-center gap-1.5"
+                              className="px-3 py-2.5 sm:py-1.5 min-h-[44px] bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg font-semibold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors text-xs sm:text-sm flex items-center justify-center gap-1.5 flex-shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Add Time Slot
@@ -1280,13 +1280,13 @@ export default function ProfilePage() {
                             (range: any, index: number) => (
                               <div
                                 key={index}
-                                className={`mb-3 grid grid-cols-12 gap-2 items-end ${
+                                className={`mb-3 grid grid-cols-1 gap-3 sm:grid-cols-12 sm:gap-2 sm:items-end min-w-0 ${
                                   validationErrors[`journalRange_${index}`]
                                     ? "border border-red-300 dark:border-red-700 rounded-lg p-2"
                                     : ""
                                 }`}
                               >
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     Start
                                   </label>
@@ -1307,10 +1307,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-5">
+                                <div className="sm:col-span-5 min-w-0">
                                   <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
                                     End
                                   </label>
@@ -1331,10 +1331,10 @@ export default function ProfilePage() {
                                       // Validate in real-time
                                       setTimeout(() => validateTimeAllocation(newForm), 0);
                                     }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
+                                    className="w-full min-w-0 px-3 py-2.5 sm:py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 text-sm"
                                   />
                                 </div>
-                                <div className="col-span-2 flex justify-end">
+                                <div className="flex justify-end sm:col-span-2">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1346,7 +1346,7 @@ export default function ProfilePage() {
                                         journalRanges: updated.length > 0 ? updated : [{ startTime: "", endTime: "" }],
                                       });
                                     }}
-                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                    className="p-2.5 sm:p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                                     aria-label="Delete time slot"
                                   >
                                     <X className="w-4 h-4" />
@@ -1402,10 +1402,10 @@ export default function ProfilePage() {
                     <div className="space-y-4 sm:space-y-5">
                       {/* Personal Work */}
                       {profile.timeCategories.personalWork && (
-                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                        <div className={`p-4 sm:p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all min-w-0 ${
                           editingCategory === "personalWork" ? "border-indigo-400 dark:border-indigo-600" : "border-transparent"
                         }`}>
-                          <div className="flex items-center justify-between mb-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 min-w-0">
                             <div className="flex items-center gap-3">
                               <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
                               <div>
@@ -1413,9 +1413,9 @@ export default function ProfilePage() {
                                 {(profile.timeCategories.personalWork.ranges && profile.timeCategories.personalWork.ranges.length > 0) ? (
                                   <div className="space-y-2">
                                     {profile.timeCategories.personalWork.ranges.map((range: any, idx: number) => (
-                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                      <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between min-w-0">
                                         {editingTimeSlot?.category === "personalWork" && editingTimeSlot?.index === idx ? (
-                                          <div className="flex items-center gap-2 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                                             <input
                                               type="time"
                                               value={timeAllocationForm.personalWorkRanges?.[idx]?.startTime || range.startTime || ""}
@@ -1430,9 +1430,9 @@ export default function ProfilePage() {
                                                   personalWorkRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <span className="text-xs text-slate-600 dark:text-slate-400 flex-shrink-0">-</span>
                                             <input
                                               type="time"
                                               value={timeAllocationForm.personalWorkRanges?.[idx]?.endTime || range.endTime || ""}
@@ -1447,24 +1447,26 @@ export default function ProfilePage() {
                                                   personalWorkRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <button
-                                              onClick={() => handleSaveTimeSlot("personalWork", idx)}
-                                              disabled={savingTimeSlot?.category === "personalWork" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
-                                              aria-label="Save time slot"
-                                            >
-                                              <Save className="w-3 h-3" />
-                                            </button>
-                                            <button
-                                              onClick={handleCancelEditTimeSlot}
-                                              disabled={savingTimeSlot?.category === "personalWork" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
-                                              aria-label="Cancel editing"
-                                            >
-                                              <X className="w-3 h-3" />
-                                            </button>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                              <button
+                                                onClick={() => handleSaveTimeSlot("personalWork", idx)}
+                                                disabled={savingTimeSlot?.category === "personalWork" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Save time slot"
+                                              >
+                                                <Save className="w-3.5 h-3.5" />
+                                              </button>
+                                              <button
+                                                onClick={handleCancelEditTimeSlot}
+                                                disabled={savingTimeSlot?.category === "personalWork" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Cancel editing"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : (
                                           <>
@@ -1503,10 +1505,10 @@ export default function ProfilePage() {
 
                       {/* Work Block */}
                       {profile.timeCategories.workBlock && (
-                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                        <div className={`p-4 sm:p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all min-w-0 ${
                           editingCategory === "workBlock" ? "border-purple-400 dark:border-purple-600" : "border-transparent"
                         }`}>
-                          <div className="flex items-center justify-between mb-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 min-w-0">
                             <div className="flex items-center gap-3">
                               <Briefcase className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
                               <div>
@@ -1514,9 +1516,9 @@ export default function ProfilePage() {
                                 {(profile.timeCategories.workBlock.ranges && profile.timeCategories.workBlock.ranges.length > 0) ? (
                                   <div className="space-y-2">
                                     {profile.timeCategories.workBlock.ranges.map((range: any, idx: number) => (
-                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                      <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between min-w-0">
                                         {editingTimeSlot?.category === "workBlock" && editingTimeSlot?.index === idx ? (
-                                          <div className="flex items-center gap-2 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                                             <input
                                               type="time"
                                               value={timeAllocationForm.workBlockRanges?.[idx]?.startTime || range.startTime || ""}
@@ -1531,9 +1533,9 @@ export default function ProfilePage() {
                                                   workBlockRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <span className="text-xs text-slate-600 dark:text-slate-400 flex-shrink-0">-</span>
                                             <input
                                               type="time"
                                               value={timeAllocationForm.workBlockRanges?.[idx]?.endTime || range.endTime || ""}
@@ -1548,24 +1550,26 @@ export default function ProfilePage() {
                                                   workBlockRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <button
-                                              onClick={() => handleSaveTimeSlot("workBlock", idx)}
-                                              disabled={savingTimeSlot?.category === "workBlock" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
-                                              aria-label="Save time slot"
-                                            >
-                                              <Save className="w-3 h-3" />
-                                            </button>
-                                            <button
-                                              onClick={handleCancelEditTimeSlot}
-                                              disabled={savingTimeSlot?.category === "workBlock" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
-                                              aria-label="Cancel editing"
-                                            >
-                                              <X className="w-3 h-3" />
-                                            </button>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                              <button
+                                                onClick={() => handleSaveTimeSlot("workBlock", idx)}
+                                                disabled={savingTimeSlot?.category === "workBlock" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Save time slot"
+                                              >
+                                                <Save className="w-3.5 h-3.5" />
+                                              </button>
+                                              <button
+                                                onClick={handleCancelEditTimeSlot}
+                                                disabled={savingTimeSlot?.category === "workBlock" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Cancel editing"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : (
                                           <>
@@ -1604,10 +1608,10 @@ export default function ProfilePage() {
 
                       {/* Productive */}
                       {profile.timeCategories.productive && (
-                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                        <div className={`p-4 sm:p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all min-w-0 ${
                           editingCategory === "productive" ? "border-green-400 dark:border-green-600" : "border-transparent"
                         }`}>
-                          <div className="flex items-center justify-between mb-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 min-w-0">
                             <div className="flex items-center gap-3">
                               <Clock className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                               <div>
@@ -1615,9 +1619,9 @@ export default function ProfilePage() {
                                 {(profile.timeCategories.productive.ranges && profile.timeCategories.productive.ranges.length > 0) ? (
                                   <div className="space-y-2">
                                     {profile.timeCategories.productive.ranges.map((range: any, idx: number) => (
-                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                      <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between min-w-0">
                                         {editingTimeSlot?.category === "productive" && editingTimeSlot?.index === idx ? (
-                                          <div className="flex items-center gap-2 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                                             <input
                                               type="time"
                                               value={timeAllocationForm.productiveRanges?.[idx]?.startTime || range.startTime || ""}
@@ -1632,9 +1636,9 @@ export default function ProfilePage() {
                                                   productiveRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <span className="text-xs text-slate-600 dark:text-slate-400 flex-shrink-0">-</span>
                                             <input
                                               type="time"
                                               value={timeAllocationForm.productiveRanges?.[idx]?.endTime || range.endTime || ""}
@@ -1649,24 +1653,26 @@ export default function ProfilePage() {
                                                   productiveRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <button
-                                              onClick={() => handleSaveTimeSlot("productive", idx)}
-                                              disabled={savingTimeSlot?.category === "productive" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
-                                              aria-label="Save time slot"
-                                            >
-                                              <Save className="w-3 h-3" />
-                                            </button>
-                                            <button
-                                              onClick={handleCancelEditTimeSlot}
-                                              disabled={savingTimeSlot?.category === "productive" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
-                                              aria-label="Cancel editing"
-                                            >
-                                              <X className="w-3 h-3" />
-                                            </button>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                              <button
+                                                onClick={() => handleSaveTimeSlot("productive", idx)}
+                                                disabled={savingTimeSlot?.category === "productive" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Save time slot"
+                                              >
+                                                <Save className="w-3.5 h-3.5" />
+                                              </button>
+                                              <button
+                                                onClick={handleCancelEditTimeSlot}
+                                                disabled={savingTimeSlot?.category === "productive" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Cancel editing"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : (
                                           <>
@@ -1705,20 +1711,20 @@ export default function ProfilePage() {
 
                       {/* Family Time */}
                       {profile.timeCategories.familyTime && (
-                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                        <div className={`p-4 sm:p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all min-w-0 ${
                           editingCategory === "familyTime" ? "border-pink-400 dark:border-pink-600" : "border-pink-200 dark:border-pink-800"
                         }`}>
-                          <div className="flex items-center justify-between mb-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 min-w-0">
                             <div className="flex items-center gap-3">
                               <Users className="w-5 h-5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Family Time</p>
                                 {(profile.timeCategories.familyTime.ranges && profile.timeCategories.familyTime.ranges.length > 0) ? (
                                   <div className="space-y-2">
                                     {profile.timeCategories.familyTime.ranges.map((range: any, idx: number) => (
-                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                      <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between min-w-0">
                                         {editingTimeSlot?.category === "familyTime" && editingTimeSlot?.index === idx ? (
-                                          <div className="flex items-center gap-2 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                                             <input
                                               type="time"
                                               value={timeAllocationForm.familyTimeRanges?.[idx]?.startTime || range.startTime || ""}
@@ -1733,9 +1739,9 @@ export default function ProfilePage() {
                                                   familyTimeRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <span className="text-xs text-slate-600 dark:text-slate-400 flex-shrink-0">-</span>
                                             <input
                                               type="time"
                                               value={timeAllocationForm.familyTimeRanges?.[idx]?.endTime || range.endTime || ""}
@@ -1750,24 +1756,26 @@ export default function ProfilePage() {
                                                   familyTimeRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <button
-                                              onClick={() => handleSaveTimeSlot("familyTime", idx)}
-                                              disabled={savingTimeSlot?.category === "familyTime" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
-                                              aria-label="Save time slot"
-                                            >
-                                              <Save className="w-3 h-3" />
-                                            </button>
-                                            <button
-                                              onClick={handleCancelEditTimeSlot}
-                                              disabled={savingTimeSlot?.category === "familyTime" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
-                                              aria-label="Cancel editing"
-                                            >
-                                              <X className="w-3 h-3" />
-                                            </button>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                              <button
+                                                onClick={() => handleSaveTimeSlot("familyTime", idx)}
+                                                disabled={savingTimeSlot?.category === "familyTime" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Save time slot"
+                                              >
+                                                <Save className="w-3.5 h-3.5" />
+                                              </button>
+                                              <button
+                                                onClick={handleCancelEditTimeSlot}
+                                                disabled={savingTimeSlot?.category === "familyTime" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Cancel editing"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : (
                                           <>
@@ -1806,20 +1814,20 @@ export default function ProfilePage() {
 
                       {/* Journaling */}
                       {profile.timeCategories.journaling && (
-                        <div className={`p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all ${
+                        <div className={`p-4 sm:p-5 bg-slate-100 dark:bg-slate-700/50 rounded-xl border-2 transition-all min-w-0 ${
                           editingCategory === "journaling" ? "border-amber-400 dark:border-amber-600" : "border-transparent"
                         }`}>
-                          <div className="flex items-center justify-between mb-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 min-w-0">
                             <div className="flex items-center gap-3">
                               <BookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">Journaling</p>
                                 {(profile.timeCategories.journaling.ranges && profile.timeCategories.journaling.ranges.length > 0) ? (
                                   <div className="space-y-2">
                                     {profile.timeCategories.journaling.ranges.map((range: any, idx: number) => (
-                                      <div key={idx} className="flex items-center justify-between gap-2">
+                                      <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between min-w-0">
                                         {editingTimeSlot?.category === "journaling" && editingTimeSlot?.index === idx ? (
-                                          <div className="flex items-center gap-2 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                                             <input
                                               type="time"
                                               value={timeAllocationForm.journalRanges?.[idx]?.startTime || range.startTime || ""}
@@ -1834,9 +1842,9 @@ export default function ProfilePage() {
                                                   journalRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <span className="text-xs text-slate-600 dark:text-slate-400">-</span>
+                                            <span className="text-xs text-slate-600 dark:text-slate-400 flex-shrink-0">-</span>
                                             <input
                                               type="time"
                                               value={timeAllocationForm.journalRanges?.[idx]?.endTime || range.endTime || ""}
@@ -1851,24 +1859,26 @@ export default function ProfilePage() {
                                                   journalRanges: updated,
                                                 });
                                               }}
-                                              className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
+                                              className="min-w-0 flex-1 min-w-[100px] px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                                             />
-                                            <button
-                                              onClick={() => handleSaveTimeSlot("journaling", idx)}
-                                              disabled={savingTimeSlot?.category === "journaling" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
-                                              aria-label="Save time slot"
-                                            >
-                                              <Save className="w-3 h-3" />
-                                            </button>
-                                            <button
-                                              onClick={handleCancelEditTimeSlot}
-                                              disabled={savingTimeSlot?.category === "journaling" && savingTimeSlot?.index === idx}
-                                              className="p-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors"
-                                              aria-label="Cancel editing"
-                                            >
-                                              <X className="w-3 h-3" />
-                                            </button>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                              <button
+                                                onClick={() => handleSaveTimeSlot("journaling", idx)}
+                                                disabled={savingTimeSlot?.category === "journaling" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Save time slot"
+                                              >
+                                                <Save className="w-3.5 h-3.5" />
+                                              </button>
+                                              <button
+                                                onClick={handleCancelEditTimeSlot}
+                                                disabled={savingTimeSlot?.category === "journaling" && savingTimeSlot?.index === idx}
+                                                className="p-2 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                                aria-label="Cancel editing"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : (
                                           <>

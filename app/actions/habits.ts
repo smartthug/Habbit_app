@@ -291,19 +291,19 @@ export async function createHabit(formData: FormData) {
             else if (timeCategory.startTime && timeCategory.endTime) {
               rangesText = `${timeCategory.startTime} - ${timeCategory.endTime}`;
               isWithinRange = isTimeRangeWithin(
-                validatedData.startTime,
-                validatedData.endTime,
-                timeCategory.startTime,
-                timeCategory.endTime
+              validatedData.startTime,
+              validatedData.endTime,
+              timeCategory.startTime,
+              timeCategory.endTime
               );
             }
           }
           
           if (!isWithinRange && rangesText) {
-            return {
+              return {
               error: `${getCategoryDisplayName(validatedData.category)} habit time (${validatedData.startTime} - ${validatedData.endTime}) is outside the allocated ${getCategoryDisplayName(validatedData.category)} Time range(s): ${rangesText} in your profile.`
-            };
-          }
+              };
+            }
           
           if (!isWithinRange && !rangesText) {
             return {
@@ -540,19 +540,19 @@ export async function updateHabit(habitId: string, formData: FormData) {
             else if (timeCategory.startTime && timeCategory.endTime) {
               rangesText = `${timeCategory.startTime} - ${timeCategory.endTime}`;
               isWithinRange = isTimeRangeWithin(
-                validatedData.startTime,
-                validatedData.endTime,
-                timeCategory.startTime,
-                timeCategory.endTime
+              validatedData.startTime,
+              validatedData.endTime,
+              timeCategory.startTime,
+              timeCategory.endTime
               );
             }
           }
           
           if (!isWithinRange && rangesText) {
-            return {
+              return {
               error: `${getCategoryDisplayName(validatedData.category)} habit time (${validatedData.startTime} - ${validatedData.endTime}) is outside the allocated ${getCategoryDisplayName(validatedData.category)} Time range(s): ${rangesText} in your profile.`
-            };
-          }
+              };
+            }
           
           if (!isWithinRange && !rangesText) {
             return {

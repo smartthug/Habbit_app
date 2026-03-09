@@ -371,12 +371,12 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
         const ranges = getCategoryRanges(checkCat, timeAllocation);
         
         if (ranges.length === 0) {
-          setTimeValidationError(
+            setTimeValidationError(
             `❌ No time allocation found for ${getCategoryDisplayName(checkCat)}. Please set up time allocation in your profile first.`
-          );
-          return false;
-        }
-        
+            );
+            return false;
+          }
+
         // Check if the habit time is within ANY of the allocated ranges
         const isWithinAnyRange = ranges.some((range: any) => {
           if (!range.startTime || !range.endTime) return false;
@@ -387,10 +387,10 @@ export default function AddModal({ isOpen, onClose, defaultTab = "idea", onHabit
           const rangesText = ranges.map((r: any) => 
             `${formatTimeForDisplay(r.startTime)} - ${formatTimeForDisplay(r.endTime)}`
           ).join(", ");
-          setTimeValidationError(
+      setTimeValidationError(
             `❌ Time slot (${formatTimeForDisplay(checkStart)} - ${formatTimeForDisplay(checkEnd)}) is outside the allocated ${getCategoryDisplayName(checkCat)} Time range(s): ${rangesText}. Please choose a time within one of these ranges.`
-          );
-          return false;
+      );
+      return false;
         }
       }
     }
