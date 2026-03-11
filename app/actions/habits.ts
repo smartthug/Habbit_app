@@ -21,7 +21,7 @@ const createHabitSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6).optional(),
   dayOfMonth: z.number().int().min(1).max(31).optional(),
   month: z.number().int().min(0).max(11).optional(),
-  priority: z.enum(["low", "high"]),
+  priority: z.enum(["low", "medium", "high"]),
   reminderTime: z.string().optional(),
   ideaGenerating: z.boolean().optional(),
 });
@@ -819,8 +819,8 @@ export async function getTodayHabits() {
   }
 }
 
-// Helper function to calculate and update completion percentage
-async function updateHabitCompletionPercentage(habitId: string, userId: string) {
+// Helper function to calculate and update completion percentage (exported for API route)
+export async function updateHabitCompletionPercentage(habitId: string, userId: string) {
   try {
     const habit = await Habit.findById(habitId);
     if (!habit || !habit.timeline) return;
