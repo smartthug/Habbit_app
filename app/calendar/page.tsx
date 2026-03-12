@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCalendarEvents, deleteCalendarEvent, updateCalendarEvent } from "@/app/actions/calendar";
 import { getHabitsForDateRange, getHabitStatusesForDate, logHabit } from "@/app/actions/habits";
@@ -155,10 +155,20 @@ export default function CalendarPage() {
   const [showHabitPopup, setShowHabitPopup] = useState(false);
   const [habitToEdit, setHabitToEdit] = useState<any | null>(null);
   const [eventToEdit, setEventToEdit] = useState<any | null>(null);
+  const monthTimelineRef = useRef<HTMLDivElement>(null);
+  const currentMonthPillRef = useRef<HTMLButtonElement>(null);
+  const hasScrolledTimelineOnceRef = useRef(false);
 
   useEffect(() => {
     loadData();
   }, [currentDate, selectedDate]);
+
+  // Scroll the month timeline to current month only once when the page first loads (not on date/month click)
+  useEffect(() => {
+    if (loading || hasScrolledTimelineOnceRef.current) return;
+    hasScrolledTimelineOnceRef.current = true;
+    currentMonthPillRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [loading]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -345,28 +355,27 @@ export default function CalendarPage() {
     return blocks;
   }, [timeCategories, habitsForSelectedDate]);
 
-  // Get all events (birthdays, todos, meetings) for selected date - combined list
+  // Get all events (birthdays, todos, meetings) for selected date - combined list (includes yearly recurring)
   const allEventsForSelectedDate = useMemo(() => {
-    // Normalize selected date to local midnight
     const normalizedSelectedDate = new Date(selectedDate);
     normalizedSelectedDate.setHours(0, 0, 0, 0);
     const selectedDateStr = getLocalDateString(normalizedSelectedDate);
     
     const allEvents: any[] = [];
     
-    // Get birthdays
+    // Get birthdays (including yearly recurring)
     const birthdays = (events || []).filter((event) => {
       if (event.type !== "birthday") return false;
-      const eventDate = new Date(event.date);
-      eventDate.setHours(0, 0, 0, 0);
-      const eventDateStr = getLocalDateString(eventDate);
-      return eventDateStr === selectedDateStr;
+      return eventOccursOnDate(event, normalizedSelectedDate);
     });
     allEvents.push(...birthdays);
     
-    // Get todos: show if selected date is within [start, deadline] (inclusive)
+    // Get todos: show if selected date is within [start, deadline], or same month/day if yearly
     const todos = (events || []).filter((event) => {
       if (event.type !== "todo") return false;
+      if (event.recurring?.enabled && event.recurring?.frequency === "yearly") {
+        return eventOccursOnDate(event, normalizedSelectedDate);
+      }
       const startDateStr = parseToLocalDateString(event.date);
       if (!startDateStr) return false;
       if (!event.deadline) return startDateStr === selectedDateStr;
@@ -376,13 +385,10 @@ export default function CalendarPage() {
     });
     allEvents.push(...todos);
     
-    // Get meetings
+    // Get meetings (including yearly recurring)
     const meetings = (events || []).filter((event) => {
       if (event.type !== "meeting") return false;
-      const eventDate = new Date(event.date);
-      eventDate.setHours(0, 0, 0, 0);
-      const eventDateStr = getLocalDateString(eventDate);
-      return eventDateStr === selectedDateStr;
+      return eventOccursOnDate(event, normalizedSelectedDate);
     });
     allEvents.push(...meetings);
     
@@ -431,7 +437,34 @@ export default function CalendarPage() {
     [calendarStart.getTime(), calendarEnd.getTime()]
   );
 
-  // Get events by type for a date (including todos with date ranges)
+  // Scrollable month timeline: 2026 Jan Feb ... Dec 2027 Jan Feb ... (continuous across years)
+  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const timelineItems = useMemo(() => {
+    const items: Array<{ type: "year"; year: number } | { type: "month"; month: number; year: number }> = [];
+    const startYear = currentDate.getFullYear() - 2;
+    const endYear = currentDate.getFullYear() + 2;
+    for (let y = startYear; y <= endYear; y++) {
+      items.push({ type: "year", year: y });
+      for (let m = 0; m < 12; m++) {
+        items.push({ type: "month", month: m, year: y });
+      }
+    }
+    return items;
+  }, [currentDate.getFullYear()]);
+
+  // Helper: does this event occur on the given date? (handles yearly recurring)
+  function eventOccursOnDate(event: any, checkDate: Date): boolean {
+    const d = new Date(checkDate);
+    d.setHours(0, 0, 0, 0);
+    const eventDate = new Date(event.date);
+    eventDate.setHours(0, 0, 0, 0);
+    if (event.recurring?.enabled && event.recurring?.frequency === "yearly") {
+      return eventDate.getMonth() === d.getMonth() && eventDate.getDate() === d.getDate();
+    }
+    return getLocalDateString(eventDate) === getLocalDateString(d);
+  }
+
+  // Get events by type for a date (including todos with date ranges and yearly recurring)
   function getEventsByTypeForDate(date: Date): {
     birthday: number;
     meeting: number;
@@ -441,39 +474,29 @@ export default function CalendarPage() {
     checkDate.setHours(0, 0, 0, 0);
     const checkDateStr = getLocalDateString(checkDate);
     
-    // Get birthdays that occur on this date
+    // Get birthdays that occur on this date (including yearly recurring)
     const birthdays = (events || []).filter((event) => {
       if (event.type !== "birthday") return false;
-      const eventDate = new Date(event.date);
-      eventDate.setHours(0, 0, 0, 0);
-      const eventDateStr = getLocalDateString(eventDate);
-      return eventDateStr === checkDateStr;
+      return eventOccursOnDate(event, date);
     });
     
-    // Get meetings that occur on this date
+    // Get meetings that occur on this date (including yearly recurring)
     const meetings = (events || []).filter((event) => {
       if (event.type !== "meeting") return false;
-      const eventDate = new Date(event.date);
-      eventDate.setHours(0, 0, 0, 0);
-      const eventDateStr = getLocalDateString(eventDate);
-      return eventDateStr === checkDateStr;
+      return eventOccursOnDate(event, date);
     });
     
-    // Get todos that fall within the date range (from start date to deadline) — show dot on every date in range
+    // Get todos: date range, or same month/day if yearly recurring
     const todos = (events || []).filter((event) => {
       if (event.type !== "todo") return false;
+      if (event.recurring?.enabled && event.recurring?.frequency === "yearly") {
+        return eventOccursOnDate(event, date);
+      }
       const startDateStr = parseToLocalDateString(event.date);
       if (!startDateStr) return false;
-
-      // If no deadline, only show on start date
-      if (!event.deadline) {
-        return startDateStr === checkDateStr;
-      }
-
+      if (!event.deadline) return startDateStr === checkDateStr;
       const deadlineDateStr = parseToLocalDateString(event.deadline);
       if (!deadlineDateStr) return startDateStr === checkDateStr;
-
-      // Show on all dates from start to deadline (inclusive)
       return checkDateStr >= startDateStr && checkDateStr <= deadlineDateStr;
     });
     
@@ -628,17 +651,17 @@ export default function CalendarPage() {
                   <button
                       key={idx}
                     onClick={() => handleDateClick(day)}
-                    className={`relative flex flex-col items-center justify-start min-h-[60px] sm:min-h-[80px] md:min-h-[100px] p-2 rounded-lg transition-all tap-target ${
-                        isCurrentMonth
-                        ? "bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
-                        : "bg-slate-50/50 dark:bg-slate-800/30 opacity-60"
+                    className={`relative flex flex-col items-center justify-start min-h-[60px] sm:min-h-[80px] md:min-h-[100px] p-2 rounded-lg transition-all tap-target border ${
+                      isToday
+                        ? "bg-blue-100 dark:bg-blue-900/60 border-blue-300 dark:border-blue-700 shadow-sm"
+                        : isCurrentMonth
+                        ? "bg-transparent dark:bg-transparent border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                        : "bg-slate-50/30 dark:bg-slate-800/20 border-slate-100 dark:border-slate-700/50 opacity-60"
                     } ${
-                      isSelected
-                        ? "ring-2 ring-indigo-500 dark:ring-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 shadow-md"
-                        : ""
-                    } ${
-                      isToday && !isSelected
-                        ? "ring-2 ring-blue-500 dark:ring-blue-400 bg-blue-100 dark:bg-blue-900/50 shadow-sm"
+                      isSelected && !isToday
+                        ? "ring-2 ring-indigo-500 dark:ring-indigo-400 ring-inset border-indigo-400 dark:border-indigo-500"
+                        : isSelected && isToday
+                        ? "ring-2 ring-indigo-500 dark:ring-indigo-400 ring-inset"
                         : ""
                     }`}
                   >
@@ -648,7 +671,7 @@ export default function CalendarPage() {
                         isSelected
                           ? "text-indigo-600 dark:text-indigo-400"
                           : isToday
-                          ? "text-blue-600 dark:text-blue-400"
+                          ? "text-blue-700 dark:text-blue-300"
                             : isCurrentMonth
                             ? "text-slate-900 dark:text-slate-100"
                             : "text-slate-400 dark:text-slate-500"
@@ -679,6 +702,44 @@ export default function CalendarPage() {
                       </div>
                     )}
                       </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Scrollable Month Timeline: 2026 Jan Feb ... Dec 2027 Jan Feb ... */}
+          <div
+            ref={monthTimelineRef}
+            className="mt-3 overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent"
+          >
+            <div className="flex items-center gap-1.5 pb-2 min-w-max">
+              {timelineItems.map((item, idx) => {
+                if (item.type === "year") {
+                  return (
+                    <span
+                      key={`y-${item.year}`}
+                      className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400"
+                    >
+                      {item.year}
+                    </span>
+                  );
+                }
+                const { month, year } = item;
+                const isCurrent = currentDate.getFullYear() === year && currentDate.getMonth() === month;
+                return (
+                  <button
+                    key={`m-${year}-${month}`}
+                    ref={isCurrent ? currentMonthPillRef : null}
+                    type="button"
+                    onClick={() => setCurrentDate(new Date(year, month, 1))}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors tap-target ${
+                      isCurrent
+                        ? "bg-indigo-500 text-white dark:bg-indigo-400 dark:text-slate-900"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    {MONTH_NAMES[month]}
+                  </button>
                 );
               })}
             </div>

@@ -100,13 +100,14 @@ export async function getCalendarEvents(startDate?: string, endDate?: string, ty
     const query: any = { userId: user.userId };
 
     if (startDate || endDate) {
-      query.date = {};
-      if (startDate) {
-        query.date.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        query.date.$lte = new Date(endDate);
-      }
+      const dateRange: Record<string, Date> = {};
+      if (startDate) dateRange.$gte = new Date(startDate);
+      if (endDate) dateRange.$lte = new Date(endDate);
+      // Include events in range OR yearly recurring (so they appear every year on same month/day)
+      query.$or = [
+        Object.keys(dateRange).length ? { date: dateRange } : {},
+        { "recurring.enabled": true, "recurring.frequency": "yearly" },
+      ].filter((clause) => Object.keys(clause).length > 0);
     }
 
     if (type) {

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Plus, Lightbulb, User, Calendar, BarChart3, Menu, X } from "lucide-react";
+import { Home, Plus, Lightbulb, User, Calendar, Menu, X } from "lucide-react";
 import AddModal from "./AddModal";
 
 export default function Navigation() {
@@ -15,15 +15,13 @@ export default function Navigation() {
     { href: "/dashboard", icon: Home, label: "Home" },
     { href: "/ideas", icon: Lightbulb, label: "Ideas" },
     { href: "/calendar", icon: Calendar, label: "Calendar" },
-    { href: "/analysis", icon: BarChart3, label: "Analysis" },
     { href: "/profile", icon: User, label: "Profile" },
   ];
 
-  // Menu items for hamburger menu (Ideas, Calendar, Analysis, Profile)
+  // Menu items for hamburger menu (Ideas, Calendar, Profile)
   const menuItems = [
     { href: "/ideas", icon: Lightbulb, label: "Ideas" },
     { href: "/calendar", icon: Calendar, label: "Calendar" },
-    { href: "/analysis", icon: BarChart3, label: "Analysis" },
     { href: "/profile", icon: User, label: "Profile" },
   ];
 

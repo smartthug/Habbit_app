@@ -303,58 +303,34 @@ export default function CalendarEventModal({
             )}
           </div>
 
-          {/* Recurring */}
+          {/* Repeat: None | Yearly — e.g. birthdays, anniversaries */}
           <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-xl">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.recurringEnabled}
-                onChange={(e) =>
-                  setFormData({ ...formData, recurringEnabled: e.target.checked })
-                }
-                className="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500"
-              />
+            <label className="flex items-center gap-2 mb-2">
               <Repeat className="w-5 h-5 text-slate-600 dark:text-slate-400" />
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Recurring Event
+                Repeat
               </span>
             </label>
+            <select
+              value={formData.recurringEnabled ? "yearly" : "none"}
+              onChange={(e) => {
+                const isYearly = e.target.value === "yearly";
+                setFormData({
+                  ...formData,
+                  recurringEnabled: isYearly,
+                  recurringFrequency: isYearly ? "yearly" : "yearly",
+                  recurringEndDate: "",
+                });
+              }}
+              className="w-full px-4 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
+            >
+              <option value="none">None</option>
+              <option value="yearly">Yearly</option>
+            </select>
             {formData.recurringEnabled && (
-              <div className="mt-3 space-y-3">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Frequency
-                  </label>
-                  <select
-                    value={formData.recurringFrequency}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        recurringFrequency: e.target.value as any,
-                      })
-                    }
-                    className="w-full px-4 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
-                  >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    End Date (optional)
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.recurringEndDate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, recurringEndDate: e.target.value })
-                    }
-                    className="w-full px-4 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-              </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                Repeats every year on this date (e.g. birthdays, anniversaries).
+              </p>
             )}
           </div>
 
