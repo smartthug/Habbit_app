@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { getTodayHabits } from "@/app/actions/habits";
 import { getCalendarEvents } from "@/app/actions/calendar";
 import { getFCMToken, onForegroundMessage } from "@/lib/firebase-client";
+import { setupNativePush } from "@/lib/capacitor-push";
 
 /**
  * NotificationManager: in-app reminders + FCM push registration.
@@ -19,6 +20,11 @@ export function NotificationManager() {
   // --- FCM: register token and handle notification redirect (habit action) ---
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Capacitor native push (Android app wrapper)
+    setupNativePush().catch((e) => {
+      console.warn("[NotificationManager] Native push setup failed:", e);
+    });
 
     // Handle redirect from notification action (Complete/Skip): call log API and clean URL
     const params = new URLSearchParams(window.location.search);

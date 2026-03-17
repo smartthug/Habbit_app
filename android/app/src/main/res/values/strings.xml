@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Habit Cracker</string>
+    <string name="title_activity_main">Habit Cracker</string>
+    <string name="package_name">com.habitcracker.app</string>
+    <string name="custom_url_scheme">com.habitcracker.app</string>
+</resources>

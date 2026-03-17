@@ -11,6 +11,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/core": "^8.2.0",
     "bcryptjs": "^2.4.3",
     "date-fns": "^3.3.1",
     "firebase": "^12.10.0",
@@ -25,6 +27,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.2.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.11.0",
