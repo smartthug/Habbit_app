@@ -100,7 +100,15 @@ export default function IdeaTree({ ideas, onIdeaClick }: IdeaTreeProps) {
     return (
       <div key={node._id} className="relative mb-6 min-w-0 max-w-full">
         {/* Node Container */}
-        <div className="flex items-start gap-2 sm:gap-3 min-w-0" style={{ marginLeft: `${Math.min(indent, typeof window !== 'undefined' && window.innerWidth < 768 ? 40 : 60)}px` }}>
+        <div
+          className="flex items-start gap-2 sm:gap-3 min-w-0"
+          style={{
+            marginLeft: `${Math.min(
+              indent,
+              typeof window !== "undefined" && window.innerWidth < 768 ? 40 : 60
+            )}px`,
+          }}
+        >
           {/* Expand/Collapse Button */}
           {hasChildren && (
             <button

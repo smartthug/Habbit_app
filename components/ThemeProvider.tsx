@@ -9,6 +9,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeTheme = async () => {
       setMounted(true);
+      console.log("[ThemeProvider] initializeTheme");
       
       // Try to get theme from database first
       try {
@@ -29,14 +30,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Fallback to localStorage or system preference
-      const savedTheme = localStorage.getItem("theme");
-      const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const savedTheme = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
+      const systemPrefersDark =
+        typeof window !== "undefined"
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          : false;
       const isDark = savedTheme === "dark" || (!savedTheme && systemPrefersDark);
       
       if (isDark) {
-        document.documentElement.classList.add("dark");
+        if (typeof document !== "undefined") {
+          document.documentElement.classList.add("dark");
+        }
       } else {
-        document.documentElement.classList.remove("dark");
+        if (typeof document !== "undefined") {
+          document.documentElement.classList.remove("dark");
+        }
       }
     };
 
@@ -74,8 +82,11 @@ export function useTheme() {
       }
 
       // Fallback to localStorage or system preference
-      const savedTheme = localStorage.getItem("theme");
-      const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const savedTheme = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
+      const systemPrefersDark =
+        typeof window !== "undefined"
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          : false;
       const isDark = savedTheme === "dark" || (!savedTheme && systemPrefersDark);
       setDarkMode(isDark);
     };
@@ -90,10 +101,12 @@ export function useTheme() {
     const themeValue = newTheme ? "dark" : "light";
     
     // Update DOM immediately for instant feedback
-    if (newTheme) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
+    if (typeof document !== "undefined") {
+      if (newTheme) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
     }
     
     // Save to localStorage immediately

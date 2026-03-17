@@ -21,6 +21,8 @@ export function NotificationManager() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    console.log("[NotificationManager] effect start");
+
     // Capacitor native push (Android app wrapper)
     setupNativePush().catch((e) => {
       console.warn("[NotificationManager] Native push setup failed:", e);

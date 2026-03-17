@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { NotificationManager } from "@/components/NotificationManager";
+// import { NotificationManager } from "@/components/NotificationManager";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 
 const inter = Inter({
@@ -48,7 +48,8 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans h-full antialiased touch-pan-y`}>
         <GlobalErrorBoundary>
           <ThemeProvider>
-            <NotificationManager />
+            {/* Temporarily disabled NotificationManager for WebView crash isolation */}
+            {/* <NotificationManager /> */}
             {children}
           </ThemeProvider>
         </GlobalErrorBoundary>

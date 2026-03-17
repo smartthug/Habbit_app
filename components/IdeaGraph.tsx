@@ -53,11 +53,16 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
   // Detect mobile device
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      if (typeof window !== "undefined") {
+        setIsMobile(window.innerWidth < 768);
+      }
     };
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", checkMobile);
+      return () => window.removeEventListener("resize", checkMobile);
+    }
+    return;
   }, []);
 
   // Recalculate layout on window resize
@@ -65,22 +70,32 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
     if (nodes.length === 0) return;
     
     const handleResize = () => {
+      if (typeof window === "undefined") return;
       // Trigger recalculation by updating nodes with new sizes
-      setNodes(prev => prev.map(node => {
-        const idea = ideas.find(i => i._id === node.id);
-        if (!idea) return node;
-        const isMobileView = window.innerWidth < 768;
-        return {
-          ...node,
-          radius: isMobileView 
-            ? (idea.priority === "important" ? 45 : 35)
-            : (idea.priority === "important" ? 60 : 50),
-        };
-      }));
+      setNodes((prev) =>
+        prev.map((node) => {
+          const idea = ideas.find((i) => i._id === node.id);
+          if (!idea) return node;
+          const isMobileView = window.innerWidth < 768;
+          return {
+            ...node,
+            radius: isMobileView
+              ? idea.priority === "important"
+                ? 45
+                : 35
+              : idea.priority === "important"
+              ? 60
+              : 50,
+          };
+        })
+      );
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+    return;
   }, [nodes.length, ideas]);
 
   // Build graph structure from ideas with BINARY TREE layout
@@ -102,7 +117,7 @@ export default function IdeaGraph({ ideas, onIdeaClick }: IdeaGraphProps) {
     ideas.forEach(root => flattenNodes(root));
 
     // Create graph nodes with responsive sizing
-    const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
+    const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
     
     allNodes.forEach((idea) => {
       nodeMap.set(idea._id, {
