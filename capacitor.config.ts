@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   webDir: ".next",
   server: {
     // TODO: replace with your actual deployed HTTPS URL on Vercel.
-    url: "https://www.indydaze.com",
+    url: "https://habbit-app-virid.vercel.app/dashboard",
     cleartext: false,
   },
   android: {
