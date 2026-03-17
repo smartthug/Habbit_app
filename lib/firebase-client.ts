@@ -71,6 +71,7 @@ async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration
  */
 export async function getFCMToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
+  if (typeof Notification === "undefined") return null;
   const messaging = getFirebaseMessaging();
   if (!messaging || !vapidKey) return null;
   try {

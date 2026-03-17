@@ -69,20 +69,26 @@ export function NotificationManager() {
     let cancelSchedule: (() => void) | null = null;
     function scheduleFCMRegister() {
       const t = setTimeout(() => {
-        if (Notification.permission === "granted") registerFCM();
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          registerFCM();
+        }
       }, 2500);
       cancelSchedule = () => clearTimeout(t);
     }
 
-    if (Notification.permission === "granted") {
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       scheduleFCMRegister();
     }
-    if ("Notification" in window && Notification.permission === "default") {
+    if (
+      typeof Notification !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "default"
+    ) {
       Notification.requestPermission().then((perm) => {
         setPermission(perm);
         if (perm === "granted") scheduleFCMRegister();
       });
-    } else if ("Notification" in window) {
+    } else if (typeof Notification !== "undefined" && "Notification" in window) {
       setPermission(Notification.permission);
     }
 
@@ -90,7 +96,11 @@ export function NotificationManager() {
     const unsubscribe = onForegroundMessage((payload) => {
       const title = payload.notification?.title || payload.data?.title || "Notification";
       const body = payload.notification?.body || payload.data?.message || payload.data?.body || "";
-      if ("Notification" in window && Notification.permission === "granted") {
+      if (
+        typeof Notification !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
         new Notification(title, { body, icon: "/favicon.ico", tag: "fcm-foreground" });
       }
     });
@@ -124,9 +134,18 @@ export function NotificationManager() {
           const incompleteHabits = result.habits.filter(
             (habit: any) => habit.todayStatus !== "done" && habit.frequency === "daily"
           );
-          if (incompleteHabits.length > 0 && permission === "granted") {
+          if (
+            incompleteHabits.length > 0 &&
+            permission === "granted" &&
+            typeof Notification !== "undefined"
+          ) {
             new Notification("Incomplete Habits Reminder", {
-              body: `You have ${incompleteHabits.length} incomplete habit${incompleteHabits.length > 1 ? "s" : ""} today: ${incompleteHabits.slice(0, 3).map((h: any) => h.name).join(", ")}${incompleteHabits.length > 3 ? "..." : ""}`,
+              body: `You have ${incompleteHabits.length} incomplete habit${
+                incompleteHabits.length > 1 ? "s" : ""
+              } today: ${incompleteHabits
+                .slice(0, 3)
+                .map((h: any) => h.name)
+                .join(", ")}${incompleteHabits.length > 3 ? "..." : ""}`,
               icon: "/favicon.ico",
               tag: "incomplete-habits",
             });
@@ -163,9 +182,13 @@ export function NotificationManager() {
         const timeDiff = reminderTime.getTime() - now.getTime();
         if (timeDiff > 0 && timeDiff <= 60000) {
           const notificationKey = `reminder-${event._id}-${reminderTime.getTime()}`;
-          if (!localStorage.getItem(notificationKey)) {
+          if (typeof Notification !== "undefined" && !localStorage.getItem(notificationKey)) {
             new Notification(event.title, {
-              body: event.description || `Event ${event.time ? `at ${event.time}` : "today"}${event.location ? ` at ${event.location}` : ""}`,
+              body:
+                event.description ||
+                `Event ${event.time ? `at ${event.time}` : "today"}${
+                  event.location ? ` at ${event.location}` : ""
+                }`,
               icon: "/favicon.ico",
               tag: `calendar-reminder-${event._id}`,
             });
